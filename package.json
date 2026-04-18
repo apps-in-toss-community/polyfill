@@ -12,11 +12,20 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./clipboard": {
+      "types": "./dist/shims/clipboard.d.ts",
+      "import": "./dist/shims/clipboard.js"
+    },
+    "./detect": {
+      "types": "./dist/detect.d.ts",
+      "import": "./dist/detect.js"
     }
   },
   "files": [
     "dist"
   ],
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
@@ -27,7 +36,7 @@
     "format": "biome format --write ."
   },
   "peerDependencies": {
-    "@apps-in-toss/web-framework": "^2.0.0"
+    "@apps-in-toss/web-framework": ">=2.4.0 <3.0.0"
   },
   "peerDependenciesMeta": {
     "@apps-in-toss/web-framework": {
@@ -38,6 +47,8 @@
     "@apps-in-toss/web-framework": "2.4.7",
     "@biomejs/biome": "2.4.12",
     "@changesets/cli": "^2.31.0",
+    "@types/node": "^24.0.0",
+    "jsdom": "^29.0.2",
     "tsdown": "^0.21.7",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
