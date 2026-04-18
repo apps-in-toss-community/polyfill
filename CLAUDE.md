@@ -22,13 +22,14 @@
 
 ### Entry-point 전략
 
-세 레이어 — 가장 opinionated한 것부터:
+두 레이어:
 
-1. **`import '@ait-co/polyfill'` (side-effect)** — `installAll()`을 호출해 covered API 전부 교체. **대부분의 앱 작성자가 쓸 형태.**
-2. **`import { install, uninstall } from '@ait-co/polyfill'`** — 위의 programmatic 버전. "feature detection 결과 필요할 때만 설치" 같은 케이스용.
-3. **Per-API 서브패스** — `import '@ait-co/polyfill/clipboard'` 등. 번들 크기에 민감한 소비자가 하나/둘만 쓰고 싶을 때.
+1. **`import { install, uninstall } from '@ait-co/polyfill'`** — 기본 엔트리. 앱 entry에서 한 번 `install()`을 호출해 covered API를 전부 교체. **대부분의 앱 작성자가 쓸 형태.** `install()`은 uninstall 함수를 반환하기도 하고, top-level `uninstall()`을 바로 호출해도 된다.
+2. **Per-API 서브패스** — `import { installClipboardShim } from '@ait-co/polyfill/clipboard'` 등. 번들 크기에 민감한 소비자가 하나/둘만 쓰고 싶을 때. 호출자가 반환받은 installer를 직접 호출한다.
 
-shim 설치는 **idempotent**. `install()`을 재호출해도 첫 호출 이후엔 no-op. 각 shim은 원본 `navigator.clipboard`/etc.를 `Symbol`-keyed 백업에 보관 → `uninstall()`이 복원 (테스트·고급 consumer용).
+**중요**: 과거 "side-effect `import '@ait-co/polyfill'`로 auto-install"을 고려했지만 채택하지 않았다 — tree-shakability를 위해 `package.json`에 `"sideEffects": false`를 선언하고, 설치는 **명시적으로** `install()` 호출로 일어나게 한다. consumer가 detect만 쓰고 싶을 때 clipboard shim까지 끌려 들어오는 것을 방지.
+
+shim 설치는 **idempotent**. 재호출해도 첫 호출 이후엔 no-op. 각 shim은 원본 `navigator.clipboard`/etc.를 `Symbol`-keyed 백업에 보관 → `uninstall()`이 복원 (테스트·고급 consumer용). uninstall은 **전역 단위** — 여러 번 호출해도 어느 한 번만 효과가 있고 나머지는 no-op.
 
 ### 환경 감지 (`src/detect.ts`)
 

@@ -28,31 +28,18 @@ export function resetDetection(): void {
  * without forcing it into the consumer's bundle.
  */
 export async function isTossEnvironment(): Promise<boolean> {
+  // Override check precedes cache so `devtools` / tests can flip the result
+  // mid-session without a `resetDetection()` call.
+  const force = globalThis.__AIT_POLYFILL_FORCE__;
+  if (force === 'toss') return true;
+  if (force === 'browser') return false;
+
   if (cached !== undefined) return cached;
 
-  // Explicit override for tests / devtools.
-  const force = globalThis.__AIT_POLYFILL_FORCE__;
-  if (force === 'toss') {
-    cached = true;
-    return cached;
-  }
-  if (force === 'browser') {
-    cached = false;
-    return cached;
-  }
-
-  try {
-    const mod = await import(
-      /* @vite-ignore */
-      '@apps-in-toss/web-framework'
-    );
-    // Presence of a well-known export is our smoke test.
-    cached = typeof mod?.getClipboardText === 'function';
-    return cached;
-  } catch {
-    cached = false;
-    return cached;
-  }
+  const mod = await loadTossSdk();
+  // Presence of a well-known export is our smoke test.
+  cached = typeof mod?.getClipboardText === 'function';
+  return cached;
 }
 
 /**
@@ -61,11 +48,7 @@ export async function isTossEnvironment(): Promise<boolean> {
  */
 export async function loadTossSdk(): Promise<typeof import('@apps-in-toss/web-framework') | null> {
   try {
-    const mod = await import(
-      /* @vite-ignore */
-      '@apps-in-toss/web-framework'
-    );
-    return mod;
+    return await import('@apps-in-toss/web-framework');
   } catch {
     return null;
   }

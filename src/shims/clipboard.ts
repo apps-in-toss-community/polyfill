@@ -31,8 +31,9 @@ function createClipboardShim(fallback: Clipboard | undefined): Clipboard {
         }
       }
       if (!fallback) {
-        throw new Error(
+        throw new DOMException(
           '[@ait-co/polyfill] navigator.clipboard.readText is not available in this environment.',
+          'NotSupportedError',
         );
       }
       return fallback.readText();
@@ -46,8 +47,9 @@ function createClipboardShim(fallback: Clipboard | undefined): Clipboard {
         }
       }
       if (!fallback) {
-        throw new Error(
+        throw new DOMException(
           '[@ait-co/polyfill] navigator.clipboard.writeText is not available in this environment.',
+          'NotSupportedError',
         );
       }
       return fallback.writeText(text);
@@ -58,31 +60,41 @@ function createClipboardShim(fallback: Clipboard | undefined): Clipboard {
     // so in Toss mode they throw.
     async read(): Promise<ClipboardItems> {
       if (await isTossEnvironment()) {
-        throw new Error(
+        throw new DOMException(
           '[@ait-co/polyfill] navigator.clipboard.read (rich content) is not supported in the Apps in Toss environment. Use readText instead.',
+          'NotSupportedError',
         );
       }
       if (!fallback?.read) {
-        throw new Error('[@ait-co/polyfill] navigator.clipboard.read is not available.');
+        throw new DOMException(
+          '[@ait-co/polyfill] navigator.clipboard.read is not available.',
+          'NotSupportedError',
+        );
       }
       return fallback.read();
     },
 
     async write(items: ClipboardItems): Promise<void> {
       if (await isTossEnvironment()) {
-        throw new Error(
+        throw new DOMException(
           '[@ait-co/polyfill] navigator.clipboard.write (rich content) is not supported in the Apps in Toss environment. Use writeText instead.',
+          'NotSupportedError',
         );
       }
       if (!fallback?.write) {
-        throw new Error('[@ait-co/polyfill] navigator.clipboard.write is not available.');
+        throw new DOMException(
+          '[@ait-co/polyfill] navigator.clipboard.write is not available.',
+          'NotSupportedError',
+        );
       }
       return fallback.write(items);
     },
 
     // EventTarget passthrough. `navigator.clipboard` extends EventTarget in the
-    // spec; mini-apps rarely use it, but we forward to the fallback when
-    // possible so consumers don't lose functionality.
+    // spec; mini-apps rarely use it. We forward to the fallback when one exists;
+    // in Toss mode (no fallback) we silently drop subscriptions — the SDK emits
+    // no clipboard events, so there is nothing to dispatch. This is lossy but
+    // preserves the spec-compatible shape.
     addEventListener: (
       ...args: Parameters<EventTarget['addEventListener']>
     ): ReturnType<EventTarget['addEventListener']> => fallback?.addEventListener(...args),
@@ -109,8 +121,12 @@ export function installClipboardShim(): () => void {
   }
 
   const host = navigator as unknown as BackupHost;
-  if (host[BACKUP_KEY] !== undefined) {
-    // Already installed. Return an uninstall that mirrors the stored backup.
+  if (BACKUP_KEY in host) {
+    // Already installed. Use `in` (not `!== undefined`) because the stored
+    // backup is legitimately `undefined` when the browser has no native
+    // `navigator.clipboard` — without this, we'd re-wrap on each install.
+    // Note: the returned uninstall is global. Any caller's uninstall fully
+    // removes the shim; callers do not have independent install handles.
     return () => uninstallClipboardShim();
   }
 

@@ -23,16 +23,23 @@ describe('detect / isTossEnvironment', () => {
     expect(await isTossEnvironment()).toBe(false);
   });
 
-  it('caches the result after the first call', async () => {
+  it('caches the detected value across calls (but not override values)', async () => {
+    // Without an override, the first real detection is cached.
+    expect(await isTossEnvironment()).toBe(true); // devDep is resolvable
+    resetDetection();
+    expect(await isTossEnvironment()).toBe(true);
+  });
+
+  it('override wins over a previously cached detection, mid-session', async () => {
+    // Prime the cache via real resolution.
+    expect(await isTossEnvironment()).toBe(true);
+
+    // Flip the override — takes effect immediately, no reset needed.
+    globalThis.__AIT_POLYFILL_FORCE__ = 'browser';
+    expect(await isTossEnvironment()).toBe(false);
+
     globalThis.__AIT_POLYFILL_FORCE__ = 'toss';
     expect(await isTossEnvironment()).toBe(true);
-
-    // Flip the override; cached value wins.
-    globalThis.__AIT_POLYFILL_FORCE__ = 'browser';
-    expect(await isTossEnvironment()).toBe(true);
-
-    resetDetection();
-    expect(await isTossEnvironment()).toBe(false);
   });
 
   it('returns true when the SDK is resolvable and exports getClipboardText', async () => {

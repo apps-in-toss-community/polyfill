@@ -137,3 +137,57 @@ describe('installClipboardShim — Toss mode', () => {
     await expect(navigator.clipboard.read()).rejects.toThrow(/not supported/);
   });
 });
+
+describe('installClipboardShim — neither Toss nor browser clipboard', () => {
+  let originalClipboard: PropertyDescriptor | undefined;
+
+  beforeEach(() => {
+    resetDetection();
+    globalThis.__AIT_POLYFILL_FORCE__ = 'browser';
+    originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    // Force-remove the jsdom-provided clipboard so the shim's fallback is undefined.
+    Object.defineProperty(navigator, 'clipboard', {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  afterEach(() => {
+    uninstallClipboardShim();
+    if (originalClipboard) {
+      Object.defineProperty(navigator, 'clipboard', originalClipboard);
+    }
+    resetDetection();
+    globalThis.__AIT_POLYFILL_FORCE__ = undefined;
+  });
+
+  it('surfaces a standard DOMException(NotSupportedError) from readText', async () => {
+    installClipboardShim();
+
+    await expect(navigator.clipboard.readText()).rejects.toMatchObject({
+      name: 'NotSupportedError',
+    });
+  });
+
+  it('surfaces a standard DOMException(NotSupportedError) from writeText', async () => {
+    installClipboardShim();
+
+    await expect(navigator.clipboard.writeText('x')).rejects.toMatchObject({
+      name: 'NotSupportedError',
+    });
+  });
+
+  it('install is idempotent when the native clipboard is absent', async () => {
+    const off1 = installClipboardShim();
+    const shimA = navigator.clipboard;
+    const off2 = installClipboardShim();
+    const shimB = navigator.clipboard;
+
+    expect(shimA).toBe(shimB);
+
+    off1();
+    off2(); // second uninstall is a global no-op
+    expect(navigator.clipboard).toBeUndefined();
+  });
+});

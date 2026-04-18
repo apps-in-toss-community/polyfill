@@ -23,36 +23,42 @@ pnpm add @apps-in-toss/web-framework   # only if you also ship a Toss build
 
 ## Usage
 
-### Side-effect import (recommended)
+### Install every shim (recommended)
 
-Install every covered shim once at app entry:
+Call `install()` once at app entry:
 
 ```ts
-import '@ait-co/polyfill';
+import { install } from '@ait-co/polyfill';
+
+install();
 
 await navigator.clipboard.writeText('hello');
 ```
 
-### Programmatic
+`install()` is idempotent — calling it again is a no-op. It returns an uninstall function; a top-level `uninstall()` is also exported for convenience.
 
 ```ts
 import { install, uninstall } from '@ait-co/polyfill';
 
 const restore = install();
 // ...
-uninstall(); // or call restore()
+restore(); // or uninstall()
 ```
 
-`install()` is idempotent. Each shim stashes the original `navigator`/`window` value so `uninstall()` restores it cleanly — useful in tests.
+Each shim stashes the original `navigator`/`window` value so `uninstall()` restores it cleanly — useful in tests.
 
 ### Subpath imports (bundle-size sensitive)
 
-Pick just the shims you need:
+Pick just the shims you need and install them explicitly:
 
 ```ts
-import '@ait-co/polyfill/clipboard';
+import { installClipboardShim } from '@ait-co/polyfill/clipboard';
 import { isTossEnvironment } from '@ait-co/polyfill/detect';
+
+installClipboardShim();
 ```
+
+The package is marked `"sideEffects": false`, so unused shims are dropped by any modern bundler when you use subpath imports.
 
 ## Supported APIs
 
