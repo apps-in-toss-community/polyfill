@@ -6,6 +6,7 @@
 
 ## 짝 repo
 
+- **`sdk-example`** (downstream consumer) — polyfill이 완성되면 sdk-example을 **표준 Web API 경로로 재작성**(또는 토글 옵션 추가)해서 실제 동작을 증명한다. 이게 polyfill의 주요 품질 게이트.
 - **`devtools`** — devtools는 SDK mock (앱인토스 독점 API를 브라우저에서 흉내), polyfill은 반대 방향(표준 Web API를 앱인토스 환경에서 동작시킴). 둘 다 쓰면 "표준 Web API로 작성 + 브라우저에서 즉시 실행"이 된다. devtools unplugin에 polyfill 주입 옵션을 추가하는 방향 고려.
 - **`agent-plugin`** — `/ait new` 시 "표준 API 모드"로 스캐폴딩 옵션 제공 (polyfill 자동 설정).
 
