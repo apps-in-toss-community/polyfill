@@ -20,8 +20,35 @@
 - **토스 환경이 아닌 경우** 브라우저의 원본 구현을 그대로 사용 (no-op shim 아님).
 - 가능하면 **tree-shakable**하게 — 사용자가 쓴 API만 번들에 포함되도록.
 
+## 기술 스택
+
+- **TypeScript** (ESM only, `"type": "module"`, strict + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`)
+- **tsdown** — 빌드
+- **vitest** — 테스트
+- **pnpm** — 패키지 매니저 (10.33.0)
+- **Biome** — lint + formatter (조직 표준)
+- **Changesets** — 릴리즈 관리 (Type A: npm publish)
+
+## 명령어
+
+```bash
+pnpm build          # tsdown으로 dist/ 빌드
+pnpm dev            # watch 모드
+pnpm typecheck      # tsc --noEmit
+pnpm test           # vitest run
+pnpm lint           # biome check .
+pnpm lint:fix       # biome check --write .
+pnpm format         # biome format --write .
+```
+
+## 릴리즈
+
+버전 정책·Changesets 흐름·Claude의 bump 권한은 umbrella `../CLAUDE.md`의 "배포 전략" 섹션과 `agent-plugin/shared/skills/changeset/SKILL.md` 참고.
+
+현재는 **`0.1.x` patch only** 구간. 첫 `1.0.0` 릴리즈는 agent-plugin 통합 완료 시점에 Dave의 명시적 지시가 있을 때.
+
 ## Status
 
-placeholder 상태. 구현 전.
+scaffold 완료, 구현 전. `src/index.ts`는 placeholder.
 
 전체 로드맵은 [landing page](https://apps-in-toss-community.github.io/) 참고.
