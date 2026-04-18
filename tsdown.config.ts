@@ -24,6 +24,13 @@ const common = {
 
 // Each entry is its own config so tsdown/Rolldown does not emit a shared hashed
 // chunk at `dist/` root — every entry point stands alone.
+//
+// Caveat: because `detect` ships both as its own entry AND inlined into `index`
+// (which re-exports from it), a consumer that imports from both entry points
+// gets two module instances. The detection cache is module-local, so calling
+// `resetDetection()` from one entry does not affect the other. This is fine in
+// practice (consumers pick one entry), but documented here so it's not a
+// surprise if it ever matters.
 export default defineConfig([
   {
     ...common,

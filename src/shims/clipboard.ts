@@ -101,6 +101,9 @@ function createClipboardShim(fallback: Clipboard | undefined): Clipboard {
     removeEventListener: (
       ...args: Parameters<EventTarget['removeEventListener']>
     ): ReturnType<EventTarget['removeEventListener']> => fallback?.removeEventListener(...args),
+    // Returns `false` in Toss mode (no backing EventTarget). A caller that reads
+    // this as "default action cancelled" should check context — there are no
+    // listeners to run because the SDK doesn't surface clipboard events.
     dispatchEvent: (event: Event): boolean => fallback?.dispatchEvent(event) ?? false,
   } satisfies Clipboard;
 

@@ -100,9 +100,6 @@ describe('installClipboardShim — Toss mode', () => {
       setClipboardText: vi.fn(),
     }));
 
-    // Re-import so the shim module gets fresh references via dynamic import in detect.ts.
-    // (No re-import actually needed — loadTossSdk uses dynamic import at call time.)
-
     attachFakeNativeClipboard();
     installClipboardShim();
     const result = await navigator.clipboard.readText();
