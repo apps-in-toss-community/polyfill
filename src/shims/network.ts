@@ -136,20 +136,20 @@ export function installNetworkShim(): () => void {
         const sdk = await loadTossSdk();
         const fn = (sdk as { getNetworkStatus?: unknown } | null)?.getNetworkStatus;
         if (typeof fn !== 'function') return;
-        try {
-          const next = (await (fn as () => Promise<SdkNetworkStatus>)()) as SdkNetworkStatus;
-          const prev = cachedStatus;
-          cachedStatus = next;
-          connection.setStatus(next);
-          // Only dispatch `change` on real transitions — the null → X seed on
-          // first install is learning, not a transition, and would otherwise
-          // mis-trigger consumer handlers.
-          if (prev !== null && prev !== next) {
-            connection.dispatchEvent(new Event('change'));
-          }
-        } catch {
-          // Keep prior cache on failure.
+        const next = (await (fn as () => Promise<SdkNetworkStatus>)()) as SdkNetworkStatus;
+        const prev = cachedStatus;
+        cachedStatus = next;
+        connection.setStatus(next);
+        // Only dispatch `change` on real transitions — the null → X seed on
+        // first install is learning, not a transition, and would otherwise
+        // mis-trigger consumer handlers.
+        if (prev !== null && prev !== next) {
+          connection.dispatchEvent(new Event('change'));
         }
+      } catch {
+        // Advisory — refresh failures keep the prior cache. `void refresh()`
+        // callers would otherwise surface unhandled rejections if
+        // isTossEnvironment / loadTossSdk / getNetworkStatus ever throw.
       } finally {
         lastRefresh = Date.now();
         inflight = null;

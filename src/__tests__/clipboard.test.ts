@@ -65,7 +65,7 @@ describe('installClipboardShim — browser mode (Toss not detected)', () => {
   });
 
   it('is idempotent — double install does not double-wrap', async () => {
-    attachFakeNativeClipboard();
+    const native = attachFakeNativeClipboard();
     const first = installClipboardShim();
     const shimA = navigator.clipboard;
     const second = installClipboardShim();
@@ -75,8 +75,9 @@ describe('installClipboardShim — browser mode (Toss not detected)', () => {
 
     first();
     second(); // should be a no-op since first already restored
-    // navigator.clipboard should now be the original fake.
-    expect(typeof navigator.clipboard.readText).toBe('function');
+    // Strong assertion: the exact fake was restored (not just "some object
+    // with a readText method happens to be here").
+    expect(navigator.clipboard).toBe(native);
   });
 
   it('uninstall exposes a prototype-level clipboard instead of leaving an own shadow', () => {

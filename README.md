@@ -63,14 +63,14 @@ The package is marked `"sideEffects": false`, so unused shims are dropped by any
 
 모든 Tier 1 shim이 단위 테스트까지 통과한 상태이고, 실환경 검증(`sdk-example` 통합)이 남아있습니다. 실환경 검증 이후 일부 API 매핑이 조정될 수 있습니다.
 
-| Web standard | SDK counterpart | First landed |
+| Web standard | SDK counterpart | Landed in |
 |---|---|---|
 | `navigator.clipboard.readText()` / `writeText(text)` | `getClipboardText()` / `setClipboardText(text)` | 0.1.0 |
-| `navigator.geolocation.getCurrentPosition()` | `getCurrentLocation({ accuracy })` | 0.1.1 |
-| `navigator.geolocation.watchPosition()` / `clearWatch()` | `startUpdateLocation(...)` | 0.1.1 |
-| `navigator.share({ title, text, url })` | `share({ message })` (concatenates into `message`) | 0.1.1 |
-| `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` (best-effort, lossy) | 0.1.1 |
-| `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` (poll on read; no `change` for seed) | 0.1.1 |
+| `navigator.geolocation.getCurrentPosition()` | `getCurrentLocation({ accuracy })` | 0.1.1 (pending) |
+| `navigator.geolocation.watchPosition()` / `clearWatch()` | `startUpdateLocation(...)` | 0.1.1 (pending) |
+| `navigator.share({ title, text, url })` | `share({ message })` (concatenates into `message`) | 0.1.1 (pending) |
+| `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` (best-effort, lossy) | 0.1.1 (pending) |
+| `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` (poll on read; no `change` for seed) | 0.1.1 (pending) |
 
 See [`TODO.md`](./TODO.md) for the full backlog and tiering.
 

@@ -84,9 +84,10 @@ describe('installShareShim — Toss mode', () => {
     });
   });
 
-  it('wraps SDK rejection as DOMException(AbortError)', async () => {
+  it('wraps SDK rejection as DOMException(AbortError) and preserves the original as .cause', async () => {
+    const original = new Error('user cancelled');
     const share = vi.fn(async () => {
-      throw new Error('user cancelled');
+      throw original;
     });
     vi.doMock('@apps-in-toss/web-framework', () => ({
       getClipboardText: vi.fn(),
@@ -100,7 +101,7 @@ describe('installShareShim — Toss mode', () => {
       (navigator as Navigator & { share: (d?: ShareData) => Promise<void> }).share({
         text: 'hi',
       }),
-    ).rejects.toMatchObject({ name: 'AbortError' });
+    ).rejects.toMatchObject({ name: 'AbortError', cause: original });
   });
 
   it('throws TypeError on empty ShareData', async () => {

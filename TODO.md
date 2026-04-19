@@ -15,6 +15,10 @@
 ## Performance
 (None)
 
+## Disabled lint rules
+
+- `style.noNonNullAssertion: off` (`biome.json`) — 편의상 꺼둔 상태. 현재 코드베이스에 `!` non-null assertion 사용은 없지만 테스트 헬퍼 작성 편의를 위해 유지. 새 프로덕션 코드에 `!` 추가는 지양, 불가피한 경우 `biome-ignore` 주석으로 이유 남길 것.
+
 ## Backlog
 - [ ] `window.localStorage` ↔ SDK `Storage.getItem/setItem/removeItem/clearItems` — **blocked on sync/async mismatch**. `localStorage` is sync, SDK `Storage` is async. Exposing a fresh `navigator.storage`-ish async wrapper is cleaner than racing the sync API; re-evaluate after Tier 1.
 - [ ] `window.open(url)` ↔ SDK `openURL(url)` — different behaviour inside Toss (in-app browser). Whether to shim at all is a policy question.
