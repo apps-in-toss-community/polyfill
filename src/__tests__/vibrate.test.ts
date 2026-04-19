@@ -111,6 +111,22 @@ describe('installVibrateShim — Toss mode', () => {
     expect(generateHapticFeedback).toHaveBeenCalledWith({ type: 'tap' });
   });
 
+  it('Toss mode: vibrate(0) does not call generateHapticFeedback', async () => {
+    const generateHapticFeedback = vi.fn(async () => undefined);
+    vi.doMock('@apps-in-toss/web-framework', () => ({
+      getClipboardText: vi.fn(),
+      generateHapticFeedback,
+    }));
+
+    attachFakeNativeVibrate();
+    installVibrateShim();
+
+    (navigator as Navigator & { vibrate: (p: VibratePattern) => boolean }).vibrate(0);
+    // Flush any pending async work.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(generateHapticFeedback).not.toHaveBeenCalled();
+  });
+
   it('ignores zero-duration "on" slots in patterns ([0, 100, 0] → no haptic)', async () => {
     const generateHapticFeedback = vi.fn(async () => undefined);
     vi.doMock('@apps-in-toss/web-framework', () => ({

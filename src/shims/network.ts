@@ -69,9 +69,9 @@ function statusToConnectionType(status: SdkNetworkStatus): string {
 }
 
 class ShimConnection extends EventTarget {
-  // Exposed so the network shim closure can update the value without
-  // reconstructing the instance (listeners stay attached).
-  _status: SdkNetworkStatus | null = null;
+  // True class-private — the shim closure updates this via `setStatus`
+  // so the underscore/public leakage doesn't show up on the API surface.
+  #status: SdkNetworkStatus | null = null;
   onchange: ((this: ShimConnection, ev: Event) => unknown) | null = null;
 
   constructor() {
@@ -81,11 +81,16 @@ class ShimConnection extends EventTarget {
     this.addEventListener('change', (ev) => this.onchange?.call(this, ev));
   }
 
-  get effectiveType(): EffectiveType {
-    return statusToEffectiveType(this._status ?? 'UNKNOWN');
+  setStatus(next: SdkNetworkStatus | null): void {
+    this.#status = next;
   }
-  // `downlink` / `rtt` are placeholders — the SDK does not expose these. We
-  // return 0 with a comment rather than fabricate plausible numbers.
+
+  get effectiveType(): EffectiveType {
+    return statusToEffectiveType(this.#status ?? 'UNKNOWN');
+  }
+  // `downlink` / `rtt` / `saveData` are placeholders — the SDK does not expose
+  // these. We return 0/false rather than fabricate plausible numbers. Noted
+  // in CLAUDE.md.
   get downlink(): number {
     return 0;
   }
@@ -96,7 +101,7 @@ class ShimConnection extends EventTarget {
     return false;
   }
   get type(): string {
-    return statusToConnectionType(this._status ?? 'UNKNOWN');
+    return statusToConnectionType(this.#status ?? 'UNKNOWN');
   }
 }
 
@@ -115,33 +120,45 @@ export function installNetworkShim(): () => void {
   // leak state between instances (module-scope would leak across tests).
   let cachedStatus: SdkNetworkStatus | null = null;
   let lastRefresh = 0;
+  let inflight: Promise<void> | null = null;
   const connection = new ShimConnection();
 
   async function refresh(): Promise<void> {
+    // Coalesce concurrent refreshes — without this, rapid reads during an
+    // in-flight SDK call each set `lastRefresh` and return early, without
+    // anyone actually fetching fresh data.
+    if (inflight) return inflight;
     const now = Date.now();
     if (now - lastRefresh < REFRESH_THROTTLE_MS) return;
-    lastRefresh = now;
-    if (!(await isTossEnvironment())) return;
-    const sdk = await loadTossSdk();
-    const fn = (sdk as { getNetworkStatus?: unknown } | null)?.getNetworkStatus;
-    if (typeof fn === 'function') {
+    inflight = (async () => {
       try {
-        const next = (await (fn as () => Promise<SdkNetworkStatus>)()) as SdkNetworkStatus;
-        const changed = cachedStatus !== next;
-        cachedStatus = next;
-        connection._status = next;
-        if (changed) {
-          connection.dispatchEvent(new Event('change'));
+        if (!(await isTossEnvironment())) return;
+        const sdk = await loadTossSdk();
+        const fn = (sdk as { getNetworkStatus?: unknown } | null)?.getNetworkStatus;
+        if (typeof fn !== 'function') return;
+        try {
+          const next = (await (fn as () => Promise<SdkNetworkStatus>)()) as SdkNetworkStatus;
+          const prev = cachedStatus;
+          cachedStatus = next;
+          connection.setStatus(next);
+          // Only dispatch `change` on real transitions — the null → X seed on
+          // first install is learning, not a transition, and would otherwise
+          // mis-trigger consumer handlers.
+          if (prev !== null && prev !== next) {
+            connection.dispatchEvent(new Event('change'));
+          }
+        } catch {
+          // Keep prior cache on failure.
         }
-      } catch {
-        // Keep prior cache on failure.
+      } finally {
+        lastRefresh = Date.now();
+        inflight = null;
       }
-    }
+    })();
+    return inflight;
   }
 
-  // Seed the cache on install so the first sync read is meaningful. Bypass
-  // the throttle for this seed call.
-  lastRefresh = 0;
+  // Seed the cache on install so the first sync read is meaningful.
   void refresh();
 
   Object.defineProperty(navigator, 'onLine', {
@@ -151,13 +168,16 @@ export function installNetworkShim(): () => void {
       if (cachedStatus !== null) {
         return statusToOnline(cachedStatus);
       }
-      // Fall back to whatever the prototype would have returned. Deleting our
-      // shadow temporarily is the cleanest way to read through.
+      // Fall back to whatever the prototype would have returned. Temporarily
+      // delete our shadow to read through; the try/finally guarantees the
+      // shadow is restored even if the prototype getter throws.
       const desc = Object.getOwnPropertyDescriptor(navigator, 'onLine');
       delete (navigator as unknown as { onLine?: boolean }).onLine;
-      const native = navigator.onLine;
-      if (desc) Object.defineProperty(navigator, 'onLine', desc);
-      return native;
+      try {
+        return navigator.onLine;
+      } finally {
+        if (desc) Object.defineProperty(navigator, 'onLine', desc);
+      }
     },
   });
 

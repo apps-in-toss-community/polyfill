@@ -16,7 +16,6 @@
 import { isTossEnvironment, isTossEnvironmentCached, loadTossSdk } from '../detect.js';
 
 const SHARE_BACKUP_KEY = Symbol.for('@ait-co/polyfill/share.original');
-const CAN_SHARE_BACKUP_KEY = Symbol.for('@ait-co/polyfill/canShare.original');
 const INSTALLED_KEY = Symbol.for('@ait-co/polyfill/share.installed');
 
 type ShareFn = (data?: ShareData) => Promise<void>;
@@ -31,8 +30,7 @@ interface Backup {
 
 interface BackupHost {
   [SHARE_BACKUP_KEY]?: Backup | undefined;
-  [CAN_SHARE_BACKUP_KEY]?: never;
-  [INSTALLED_KEY]?: boolean;
+  [INSTALLED_KEY]?: true;
 }
 
 function buildSdkMessage(data: ShareData | undefined): string {
@@ -60,9 +58,14 @@ async function shareShim(data?: ShareData): Promise<void> {
         await (fn as (o: { message: string }) => Promise<void>)({ message });
       } catch (e) {
         // Spec says navigator.share rejects with a DOMException. Wrap SDK
-        // errors as AbortError (the most common cause is user cancellation).
+        // errors as AbortError (the most common cause is user cancellation),
+        // attaching the original as `.cause` for Sentry-style telemetry.
         const message_ = e instanceof Error ? e.message : String(e);
-        throw new DOMException(message_, 'AbortError');
+        const wrapped = new DOMException(message_, 'AbortError');
+        if (e instanceof Error) {
+          (wrapped as Error).cause = e;
+        }
+        throw wrapped;
       }
       return;
     }
@@ -97,6 +100,11 @@ function canShareShim(data?: ShareData): boolean {
     return Boolean(data?.title || data?.text || data?.url);
   }
 
+  // `toss === undefined` (detection not resolved) with non-file payload falls
+  // through to the browser-native answer. Rationale: `canShare` is rarely
+  // load-bearing — consumers care about `share()` itself, which awaits the
+  // async detection correctly. A false-negative here would needlessly hide a
+  // Share button while detection settles.
   // Browser path: delegate to native when present.
   const host = navigator as unknown as BackupHost;
   const backup = host[SHARE_BACKUP_KEY];

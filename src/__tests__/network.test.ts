@@ -135,4 +135,24 @@ describe('installNetworkShim — Toss mode', () => {
       .connection;
     expect(typeof connection?.addEventListener).toBe('function');
   });
+
+  it('does not dispatch a spurious `change` event from the initial seed', async () => {
+    vi.resetModules();
+    const getNetworkStatus = vi.fn(async () => 'WIFI' as const);
+    vi.doMock('@apps-in-toss/web-framework', () => ({
+      getClipboardText: vi.fn(),
+      getNetworkStatus,
+    }));
+
+    installNetworkShim();
+    const listener = vi.fn();
+    const connection = (navigator as Navigator & { connection?: EventTarget }).connection;
+    connection?.addEventListener('change', listener);
+
+    // Wait for the seed refresh to resolve, then assert we saw no change
+    // event (null → X is learning, not a transition).
+    await vi.waitFor(() => expect(navigator.onLine).toBe(true));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(listener).not.toHaveBeenCalled();
+  });
 });

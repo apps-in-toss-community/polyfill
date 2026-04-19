@@ -61,23 +61,20 @@ The package is marked `"sideEffects": false`, so unused shims are dropped by any
 
 ## Supported APIs
 
-| Web standard | SDK counterpart | Status |
+모든 Tier 1 shim이 단위 테스트까지 통과한 상태이고, 실환경 검증(`sdk-example` 통합)이 남아있습니다. 실환경 검증 이후 일부 API 매핑이 조정될 수 있습니다.
+
+| Web standard | SDK counterpart | First landed |
 |---|---|---|
-| `navigator.clipboard.readText()` | `getClipboardText()` | 🟡 implemented, pending sdk-example verification |
-| `navigator.clipboard.writeText(text)` | `setClipboardText(text)` | 🟡 implemented, pending sdk-example verification |
-| `navigator.geolocation.getCurrentPosition()` | `getCurrentLocation({ accuracy })` | 🟡 implemented, pending sdk-example verification |
-| `navigator.geolocation.watchPosition()` / `clearWatch()` | `startUpdateLocation(...)` | 🟡 implemented, pending sdk-example verification |
-| `navigator.share({ title, text, url })` | `share({ message })` | 🟡 implemented, pending sdk-example verification (concatenates into `message`) |
-| `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` | 🟡 implemented, pending sdk-example verification (best-effort, lossy mapping) |
-| `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` | 🟡 implemented, pending sdk-example verification (poll on read; no `change` events) |
+| `navigator.clipboard.readText()` / `writeText(text)` | `getClipboardText()` / `setClipboardText(text)` | 0.1.0 |
+| `navigator.geolocation.getCurrentPosition()` | `getCurrentLocation({ accuracy })` | 0.1.1 |
+| `navigator.geolocation.watchPosition()` / `clearWatch()` | `startUpdateLocation(...)` | 0.1.1 |
+| `navigator.share({ title, text, url })` | `share({ message })` (concatenates into `message`) | 0.1.1 |
+| `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` (best-effort, lossy) | 0.1.1 |
+| `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` (poll on read; no `change` for seed) | 0.1.1 |
 
 See [`TODO.md`](./TODO.md) for the full backlog and tiering.
 
 APIs without a reasonable Web standard counterpart (auth, IAP, ads, analytics, Toss-specific environment info) stay in the `@apps-in-toss/web-framework` namespace — polyfill is not the home for "everything the SDK does." Rationale in [`CLAUDE.md`](./CLAUDE.md).
-
-## Status
-
-Tier 1 shims(clipboard · geolocation · share · vibrate · network) 구현 완료. 다음은 `sdk-example` 통합을 통한 실제 환경 검증. 전체 로드맵은 [organization landing page](https://apps-in-toss-community.github.io/) 참고.
 
 ## License
 

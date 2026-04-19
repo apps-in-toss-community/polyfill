@@ -78,6 +78,27 @@ describe('installClipboardShim — browser mode (Toss not detected)', () => {
     // navigator.clipboard should now be the original fake.
     expect(typeof navigator.clipboard.readText).toBe('function');
   });
+
+  it('uninstall exposes a prototype-level clipboard instead of leaving an own shadow', () => {
+    const proto = Object.getPrototypeOf(navigator) as object;
+    const origDesc = Object.getOwnPropertyDescriptor(proto, 'clipboard');
+    delete (navigator as unknown as { clipboard?: Clipboard }).clipboard;
+    const fake = { readText: async () => 'proto' } as unknown as Clipboard;
+    Object.defineProperty(proto, 'clipboard', { configurable: true, get: () => fake });
+
+    try {
+      installClipboardShim();
+      uninstallClipboardShim();
+      expect(navigator.clipboard).toBe(fake);
+      expect(Object.getOwnPropertyDescriptor(navigator, 'clipboard')).toBeUndefined();
+    } finally {
+      if (origDesc) {
+        Object.defineProperty(proto, 'clipboard', origDesc);
+      } else {
+        delete (proto as { clipboard?: unknown }).clipboard;
+      }
+    }
+  });
 });
 
 describe('installClipboardShim — Toss mode', () => {

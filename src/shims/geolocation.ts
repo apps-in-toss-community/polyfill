@@ -80,23 +80,29 @@ function toStandardPosition(sdk: SdkLocation): GeolocationPosition {
 function toPositionError(code: 1 | 2 | 3, message: string): GeolocationPositionError {
   // Prefer the real constructor when available (every real browser ships it).
   // The spec says GeolocationPositionError is not constructable, so we fall
-  // through to a fabricated object that matches the prototype via
-  // `setPrototypeOf` — that keeps `instanceof` checks in consumer code working.
+  // through to a fabricated object whose prototype is patched via
+  // `setPrototypeOf` — that keeps `instanceof` checks in consumer code working
+  // and picks up the spec's PERMISSION_DENIED / POSITION_UNAVAILABLE / TIMEOUT
+  // constants from the real prototype rather than hard-coding them (avoids
+  // drift if the spec ever grows a new code).
   const Ctor = (globalThis as { GeolocationPositionError?: unknown }).GeolocationPositionError;
-  const shape = {
-    code,
-    message,
-    PERMISSION_DENIED: 1 as const,
-    POSITION_UNAVAILABLE: 2 as const,
-    TIMEOUT: 3 as const,
-  };
   if (typeof Ctor === 'function') {
     const proto = (Ctor as { prototype?: object }).prototype;
     if (proto) {
+      const shape: { code: number; message: string } = { code, message };
       Object.setPrototypeOf(shape, proto);
+      return shape as GeolocationPositionError;
     }
   }
-  return shape as GeolocationPositionError;
+  // jsdom / last-resort fallback: fabricate the spec shape with hard-coded
+  // constants since there's no prototype to delegate to.
+  return {
+    code,
+    message,
+    PERMISSION_DENIED: 1,
+    POSITION_UNAVAILABLE: 2,
+    TIMEOUT: 3,
+  } as GeolocationPositionError;
 }
 
 function accuracyFromOptions(options: PositionOptions | undefined): number {

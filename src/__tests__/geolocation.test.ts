@@ -75,6 +75,29 @@ describe('installGeolocationShim — browser mode', () => {
     uninstallGeolocationShim();
     expect(navigator.geolocation).toBe(native);
   });
+
+  it('uninstall exposes a prototype-level geolocation instead of leaving an own shadow', () => {
+    // Simulate a real-browser shape: geolocation lives on the prototype.
+    const proto = Object.getPrototypeOf(navigator) as object;
+    const origDesc = Object.getOwnPropertyDescriptor(proto, 'geolocation');
+    // Remove any own override first.
+    delete (navigator as unknown as { geolocation?: Geolocation }).geolocation;
+    const fake = { getCurrentPosition: () => {} } as unknown as Geolocation;
+    Object.defineProperty(proto, 'geolocation', { configurable: true, get: () => fake });
+
+    try {
+      installGeolocationShim();
+      uninstallGeolocationShim();
+      expect(navigator.geolocation).toBe(fake);
+      expect(Object.getOwnPropertyDescriptor(navigator, 'geolocation')).toBeUndefined();
+    } finally {
+      if (origDesc) {
+        Object.defineProperty(proto, 'geolocation', origDesc);
+      } else {
+        delete (proto as { geolocation?: unknown }).geolocation;
+      }
+    }
+  });
 });
 
 describe('installGeolocationShim — Toss mode', () => {
@@ -197,7 +220,7 @@ describe('installGeolocationShim — Toss mode', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
-  it('clearWatch called before the async subscribe resolves still tears down the SDK subscription', async () => {
+  it('clearWatch before async subscribe resolves: never leaks the SDK subscription', async () => {
     const unsubscribe = vi.fn();
     const startUpdateLocation = vi.fn(() => unsubscribe);
     vi.doMock('@apps-in-toss/web-framework', () => ({
@@ -212,13 +235,19 @@ describe('installGeolocationShim — Toss mode', () => {
     // Race: clear before the async install can set sdkWatches.
     navigator.geolocation.clearWatch(id);
 
-    // Let the async subscribe resolve; it should either see the cancel flag
-    // and skip, or subscribe+immediately-unsubscribe.
-    await vi.waitFor(() => {
-      const subscribed = startUpdateLocation.mock.calls.length;
-      // If the SDK did get called, the unsubscribe must have fired too.
-      if (subscribed > 0) expect(unsubscribe).toHaveBeenCalledTimes(subscribed);
-      expect(subscribed).toBeGreaterThanOrEqual(0);
-    });
+    // Let every microtask / dynamic import resolve.
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Either (a) cancel won the race — SDK was never subscribed, or (b) the
+    // late-cancel branch unsubscribed after a subscribe landed. What must NOT
+    // happen: subscribe with no matching unsubscribe (a leak).
+    const subscribed = startUpdateLocation.mock.calls.length;
+    expect(unsubscribe).toHaveBeenCalledTimes(subscribed);
+
+    // A second clearWatch on the same id must be a no-op — no extra unsubscribe.
+    const before = unsubscribe.mock.calls.length;
+    navigator.geolocation.clearWatch(id);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(unsubscribe.mock.calls.length).toBe(before);
   });
 });
