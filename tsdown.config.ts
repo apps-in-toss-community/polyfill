@@ -44,6 +44,26 @@ export default defineConfig([
   },
   {
     ...common,
+    entry: { 'shims/geolocation': 'src/shims/geolocation.ts' },
+    format: ['esm'],
+  },
+  {
+    ...common,
+    entry: { 'shims/share': 'src/shims/share.ts' },
+    format: ['esm'],
+  },
+  {
+    ...common,
+    entry: { 'shims/vibrate': 'src/shims/vibrate.ts' },
+    format: ['esm'],
+  },
+  {
+    ...common,
+    entry: { 'shims/network': 'src/shims/network.ts' },
+    format: ['esm'],
+  },
+  {
+    ...common,
     entry: { detect: 'src/detect.ts' },
     format: ['esm'],
   },

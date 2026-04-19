@@ -17,6 +17,22 @@
       "types": "./dist/shims/clipboard.d.ts",
       "import": "./dist/shims/clipboard.js"
     },
+    "./geolocation": {
+      "types": "./dist/shims/geolocation.d.ts",
+      "import": "./dist/shims/geolocation.js"
+    },
+    "./share": {
+      "types": "./dist/shims/share.d.ts",
+      "import": "./dist/shims/share.js"
+    },
+    "./vibrate": {
+      "types": "./dist/shims/vibrate.d.ts",
+      "import": "./dist/shims/vibrate.js"
+    },
+    "./network": {
+      "types": "./dist/shims/network.d.ts",
+      "import": "./dist/shims/network.js"
+    },
     "./detect": {
       "types": "./dist/detect.d.ts",
       "import": "./dist/detect.js"

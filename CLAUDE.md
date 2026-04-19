@@ -133,6 +133,42 @@ pnpm format         # biome format --write .
 
 polyfill이 `navigator`를 mutate하므로 consumer의 TS는 이미 올바른 타입(DOM lib)을 본다. Toss-specific extras를 별도로 노출하지 않으므로 ambient 타입 augmentation은 ship하지 않는다 — 그건 SDK의 몫.
 
-## Status
+## Tier 1 shim별 설계 결정 (ship 시점에 남긴 메모)
 
-scaffold 완료. `src/shims/clipboard.ts`만 구현, 나머지는 `TODO.md` 참고. 전체 로드맵은 [landing page](https://apps-in-toss-community.github.io/).
+### clipboard
+- `readText` / `writeText` 만 SDK 경유. `read` / `write` (rich content) 는 토스에 대응 없음 → `NotSupportedError`.
+- EventTarget 메서드는 fallback이 있으면 forwarding, 없으면 silently drop. SDK가 clipboard event를 emit하지 않으므로 의도적으로 lossy.
+
+### geolocation
+- `PositionOptions.enableHighAccuracy` boolean → SDK `Accuracy` enum(numeric) 매핑: `true → High (4)`, `false → Balanced (3)`. `timeout` / `maximumAge`는 SDK가 받지 않으므로 무시한다.
+- SDK `coords`에는 `speed` 필드가 없음 → `null` (spec상 "unknown"). `altitude` / `altitudeAccuracy` / `heading`은 직접 전달(SDK가 number로 주고 spec은 `number | null` 허용).
+- `watchPosition`이 반환하는 numeric watch id는 shim 내부 카운터. SDK `startUpdateLocation`는 `unsubscribe` 클로저를 반환하므로 id → unsubscribe Map으로 매핑. `clearWatch(id)`가 적절한 쪽(`sdkWatches` 또는 `nativeWatches`)을 조회해 정리.
+- `startUpdateLocation`은 `timeInterval` / `distanceInterval`을 요구하지만 web `watchPosition`에는 대응 없음. 기본값 `timeInterval: 1000`, `distanceInterval: 0`로 고정 — 소비자가 세밀히 제어하려면 SDK를 직접 쓰라는 의미.
+
+### share
+- SDK `share`는 단일 `message: string`만 받음. `title` / `text` / `url`을 `\n`로 연결해 하나의 메시지로 만든다. 소비자는 파싱 가능한 markdown 링크 같은 구조를 기대하지 말 것 — 단순 문자열 합성.
+- 빈 `ShareData`({})는 `TypeError`. Web spec도 "must have at least one of …"를 암시.
+- `canShare({ files })`는 Toss 모드에서 `false` (SDK는 file sharing 없음). Browser 모드에서는 native `canShare`에 위임.
+
+### vibrate (best-effort, 의도적으로 lossy)
+- Web `navigator.vibrate`는 **sync에 boolean 반환**, SDK `generateHapticFeedback`은 **async Promise**. 두 semantics를 완전히 화해시키는 것은 불가능. 선택한 trade-off:
+  - shim은 항상 `true`를 sync 반환 (fire-and-forget).
+  - SDK 호출 실패는 삼킨다(spec의 `vibrate`는 에러 surface 경로 없음).
+- Duration → haptic type 매핑:
+  - `< 40ms` → `tickWeak` (짧은 UI feedback)
+  - `≥ 40ms` → `basicMedium` (강한 feedback)
+  - 배열 패턴: 짝수 index만 "on"으로 보고 `tap` 반복, 홀수 index는 `setTimeout` 지연
+- 40ms 문턱값은 임의값(Android 기본 "haptic feedback" 상수와 iOS "light tap" 범주에 근거한 경험치). 정확한 vibration pattern reproduction은 불가 — 문서화된 best-effort.
+- 왜 그래도 ship 하는가: mini-app UI가 `navigator.vibrate`를 조건부로 호출하는 패턴이 흔하고, 완전히 dropping 하면 토스 내에서 무감각한 UX가 된다. 불완전해도 "진동 발생" 신호만 전달되면 UX 품질이 올라감.
+
+### network
+- SDK `getNetworkStatus()`는 one-shot async. Web `navigator.onLine`은 sync property getter. Gap을 메우는 방식:
+  - install 시 `getNetworkStatus()`를 non-blocking 호출로 cache seed.
+  - 이후 read마다 background refresh + cached value 반환. 첫 read 전에는 native value (jsdom 기본 `true`) fallback.
+  - `change` 이벤트는 **합성하지 않는다** (Backlog 참고). 전환 감지가 필요하면 소비자가 polling 해야 함.
+- `WIFI` / `WWAN` / `UNKNOWN` → `effectiveType: '4g'` (web에는 "wifi" 값이 없음; "4g"가 "빠른 연결"의 관용적 의미).
+- `type`(비표준, NetworkInformation level 2): `WIFI → 'wifi'`, cellular group → `'cellular'`, `OFFLINE → 'none'`.
+
+## 현재 Status
+
+Tier 1 전부 구현: clipboard · geolocation · share · vibrate · network. 다음은 `sdk-example` 통합을 통한 실환경 검증. 전체 로드맵은 [landing page](https://apps-in-toss-community.github.io/).

@@ -66,10 +66,11 @@ The package is marked `"sideEffects": false`, so unused shims are dropped by any
 |---|---|---|
 | `navigator.clipboard.readText()` | `getClipboardText()` | ✅ shipped |
 | `navigator.clipboard.writeText(text)` | `setClipboardText(text)` | ✅ shipped |
-| `navigator.geolocation.*` | `getCurrentLocation` / `startUpdateLocation` | planned |
-| `navigator.share(...)` | `share({ message })` | planned |
-| `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` | planned |
-| `navigator.onLine` / `connection` | `getNetworkStatus()` | planned |
+| `navigator.geolocation.getCurrentPosition()` | `getCurrentLocation({ accuracy })` | ✅ shipped |
+| `navigator.geolocation.watchPosition()` / `clearWatch()` | `startUpdateLocation(...)` | ✅ shipped |
+| `navigator.share({ title, text, url })` | `share({ message })` | ✅ shipped (concatenates into `message`) |
+| `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` | ✅ shipped (best-effort, lossy mapping) |
+| `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` | ✅ shipped (poll on read; no `change` events) |
 
 See [`TODO.md`](./TODO.md) for the full backlog and tiering.
 
@@ -77,7 +78,7 @@ APIs without a reasonable Web standard counterpart (auth, IAP, ads, analytics, T
 
 ## Status
 
-scaffold 완료, clipboard shim만 구현됨. 전체 로드맵은 [organization landing page](https://apps-in-toss-community.github.io/) 참고.
+Tier 1 shims(clipboard · geolocation · share · vibrate · network) 구현 완료. 다음은 `sdk-example` 통합을 통한 실제 환경 검증. 전체 로드맵은 [organization landing page](https://apps-in-toss-community.github.io/) 참고.
 
 ## License
 
