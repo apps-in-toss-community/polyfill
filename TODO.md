@@ -5,6 +5,7 @@
 
 ## Medium Priority
 - [ ] `sdk-example` 통합 — polyfill이 실제 Apps in Toss 환경에서 `navigator.clipboard.writeText()` / `navigator.geolocation.*` / `navigator.share(...)` / `navigator.vibrate(...)` / `navigator.onLine` + `navigator.connection` 경로로 동작하는지 `sdk-example`의 각 ApiCard에서 확인. 이게 Tier 1의 품질 게이트.
+- [ ] `0.1.1` Version Packages PR merge 직후 `README.md` 지원 API 테이블에서 `0.1.1 (pending)` 를 `0.1.1` 로 교체. 잊지 않도록 여기 적어둠.
 
 ## Low Priority
 - [ ] Ship CJS build alongside ESM if a consumer requests it (currently ESM-only, Node 24 + modern bundlers only).

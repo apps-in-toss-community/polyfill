@@ -68,9 +68,13 @@ function statusToConnectionType(status: SdkNetworkStatus): string {
   }
 }
 
+// Symbol-keyed setter: the install closure can mutate status without exposing
+// a public `setStatus` method on `navigator.connection` (real
+// NetworkInformation has no mutator). Consumers enumerating or discovering the
+// instance still see only the spec-shaped getters.
+const SET_STATUS = Symbol('@ait-co/polyfill/network.setStatus');
+
 class ShimConnection extends EventTarget {
-  // True class-private — the shim closure updates this via `setStatus`
-  // so the underscore/public leakage doesn't show up on the API surface.
   #status: SdkNetworkStatus | null = null;
   onchange: ((this: ShimConnection, ev: Event) => unknown) | null = null;
 
@@ -81,7 +85,7 @@ class ShimConnection extends EventTarget {
     this.addEventListener('change', (ev) => this.onchange?.call(this, ev));
   }
 
-  setStatus(next: SdkNetworkStatus | null): void {
+  [SET_STATUS](next: SdkNetworkStatus | null): void {
     this.#status = next;
   }
 
@@ -139,7 +143,7 @@ export function installNetworkShim(): () => void {
         const next = (await (fn as () => Promise<SdkNetworkStatus>)()) as SdkNetworkStatus;
         const prev = cachedStatus;
         cachedStatus = next;
-        connection.setStatus(next);
+        connection[SET_STATUS](next);
         // Only dispatch `change` on real transitions — the null → X seed on
         // first install is learning, not a transition, and would otherwise
         // mis-trigger consumer handlers.

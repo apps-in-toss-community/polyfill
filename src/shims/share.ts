@@ -97,7 +97,11 @@ function canShareShim(data?: ShareData): boolean {
 
   // Toss with non-file payloads: true iff there's at least one field.
   if (toss === true) {
-    return Boolean(data?.title || data?.text || data?.url);
+    return Boolean(
+      (data?.title != null && data.title !== '') ||
+        (data?.text != null && data.text !== '') ||
+        (data?.url != null && data.url !== ''),
+    );
   }
 
   // `toss === undefined` (detection not resolved) with non-file payload falls
@@ -112,7 +116,11 @@ function canShareShim(data?: ShareData): boolean {
   if (originalCanShare) {
     return originalCanShare.call(navigator, data);
   }
-  return Boolean(data?.title || data?.text || data?.url);
+  return Boolean(
+    (data?.title != null && data.title !== '') ||
+      (data?.text != null && data.text !== '') ||
+      (data?.url != null && data.url !== ''),
+  );
 }
 
 export function installShareShim(): () => void {

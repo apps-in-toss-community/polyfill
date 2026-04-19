@@ -1,7 +1,7 @@
 # @ait-co/polyfill
 
 > 🚧 **Pre-release (0.1.x)** — implemented, pending `sdk-example` integration verification.
-> Part of the unofficial `apps-in-toss-community` project. Not affiliated with Toss / Viva Republica.
+> Part of the unofficial `apps-in-toss-community` project. Not affiliated with Toss.
 > 비공식 커뮤니티 프로젝트입니다. 토스와 제휴하지 않았습니다.
 
 Web standard API polyfill for Apps in Toss mini-apps. Write your mini-app with **standard Web APIs** (`navigator.clipboard`, `navigator.geolocation`, …) and have it transparently work inside Apps in Toss.
