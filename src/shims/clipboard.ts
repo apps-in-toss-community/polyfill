@@ -12,9 +12,11 @@
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
 
 const BACKUP_KEY = Symbol.for('@ait-co/polyfill/clipboard.original');
+const HAD_KEY = Symbol.for('@ait-co/polyfill/clipboard.hadOriginal');
 
 interface BackupHost {
   [BACKUP_KEY]?: Clipboard | undefined;
+  [HAD_KEY]?: boolean;
 }
 
 /**
@@ -135,6 +137,7 @@ export function installClipboardShim(): () => void {
 
   const original = navigator.clipboard as Clipboard | undefined;
   host[BACKUP_KEY] = original;
+  host[HAD_KEY] = 'clipboard' in navigator;
 
   const shim = createClipboardShim(original);
   Object.defineProperty(navigator, 'clipboard', {
@@ -147,8 +150,9 @@ export function installClipboardShim(): () => void {
 }
 
 /**
- * Remove the shim and restore the original `navigator.clipboard` (or leave it
- * `undefined` if the browser never had one).
+ * Remove the shim and restore the pre-install shape. Uses delete + conditional
+ * redefine so a prototype-level `navigator.clipboard` (non-configurable in real
+ * browsers) becomes visible again instead of being permanently shadowed.
  */
 export function uninstallClipboardShim(): void {
   if (typeof navigator === 'undefined') return;
@@ -156,10 +160,15 @@ export function uninstallClipboardShim(): void {
   if (!(BACKUP_KEY in host)) return;
 
   const original = host[BACKUP_KEY];
-  Object.defineProperty(navigator, 'clipboard', {
-    value: original,
-    configurable: true,
-    writable: true,
-  });
+  const had = host[HAD_KEY];
+  delete (navigator as unknown as { clipboard?: Clipboard }).clipboard;
+  if (had && navigator.clipboard !== original) {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: original,
+      configurable: true,
+      writable: true,
+    });
+  }
   delete host[BACKUP_KEY];
+  delete host[HAD_KEY];
 }

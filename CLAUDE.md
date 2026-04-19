@@ -31,6 +31,10 @@
 
 shim 설치는 **idempotent**. 재호출해도 첫 호출 이후엔 no-op. 각 shim은 원본 `navigator.clipboard`/etc.를 `Symbol`-keyed 백업에 보관 → `uninstall()`이 복원 (테스트·고급 consumer용). uninstall은 **전역 단위** — 여러 번 호출해도 어느 한 번만 효과가 있고 나머지는 no-op.
 
+Top-level `install()` 도 같은 의미로 idempotent — 반복 호출은 새 일을 하지 않지만 반환되는 uninstall 클로저는 여전히 전체 teardown을 수행한다.
+
+**Prototype 프로퍼티(`navigator.onLine`, `connection`, `geolocation` 등) 처리**: 실제 브라우저에서 이 프로퍼티들은 `Navigator.prototype`에 non-configurable getter로 정의돼 있어 **prototype을 건드리면 TypeError**. 우리는 항상 instance level에 `configurable: true` descriptor를 얹어 prototype을 가리기만 하고, uninstall 때 `delete navigator.xxx`로 instance override만 제거해서 prototype getter가 다시 드러나도록 한다. Prototype은 절대 mutate하지 않는다.
+
 ### 환경 감지 (`src/detect.ts`)
 
 단일 `isTossEnvironment()` 함수:
@@ -47,9 +51,25 @@ shim 설치는 **idempotent**. 재호출해도 첫 호출 이후엔 no-op. 각 s
 // src/shims/clipboard.ts
 export function installClipboardShim(): () => void {
   const original = navigator.clipboard;
+  const had = 'clipboard' in navigator;
   // replacement: Toss면 SDK 경유, 아니면 original로 fall-through
-  Object.defineProperty(navigator, 'clipboard', { value: replacement, configurable: true });
-  return () => Object.defineProperty(navigator, 'clipboard', { value: original, configurable: true });
+  Object.defineProperty(navigator, 'clipboard', {
+    value: replacement,
+    configurable: true,
+    writable: true,
+  });
+  return () => {
+    // Prototype-safe teardown: delete the instance shadow so the prototype
+    // getter (non-configurable in real browsers) surfaces again.
+    delete (navigator as { clipboard?: Clipboard }).clipboard;
+    if (had && navigator.clipboard !== original) {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: original,
+        configurable: true,
+        writable: true,
+      });
+    }
+  };
 }
 ```
 
@@ -58,7 +78,7 @@ export function installClipboardShim(): () => void {
 ### Build / Test
 
 - **`tsdown`** — devtools / org 표준과 일치.
-- **ESM only** (Node 24, 모던 번들러). CJS는 consumer 요청 시 추가.
+- **ESM only** (소비자 측 Node `>=20`, 모던 번들러). CJS는 consumer 요청 시 추가. 내부 dev tooling은 umbrella 표준 Node 24 LTS를 사용.
 - 진입점 다중화: `index`, `clipboard`, `detect`. `target: es2022`, DTS + sourcemap.
 - **`vitest` + jsdom** (devtools와 parity). 각 shim은 **세 경로**를 테스트: (1) Toss 존재(`vi.mock`), (2) 브라우저 only, (3) 둘 다 없음 → 표준 에러 surface.
 
@@ -123,16 +143,52 @@ pnpm format         # biome format --write .
 
 ### 로드맵
 
-1. scaffold + clipboard shim — `0.1.0` (현재)
-2. geolocation + network status — `0.1.1`
-3. share + vibrate — `0.1.2`
-4. sdk-example 통합 — 브라우저(+ devtools)와 실제 토스 환경 양쪽에서 `navigator.clipboard.writeText()` 경로 동작 확인
-5. `1.0.0` — agent-plugin ship과 coordinated. Dave의 명시적 지시 시점.
+1. `0.1.0` — scaffold + clipboard shim
+2. `0.1.1` — 남은 Tier 1 (geolocation + share + vibrate + network) 한 번에 드롭 (현재 PR)
+3. `0.1.2+` — `sdk-example` 통합에서 드러나는 fix · API mapping 조정
+4. `1.0.0` — agent-plugin ship과 coordinated. Dave의 명시적 지시 시점.
 
 ## TypeScript 타입
 
 polyfill이 `navigator`를 mutate하므로 consumer의 TS는 이미 올바른 타입(DOM lib)을 본다. Toss-specific extras를 별도로 노출하지 않으므로 ambient 타입 augmentation은 ship하지 않는다 — 그건 SDK의 몫.
 
-## Status
+## Tier 1 shim별 설계 결정 (ship 시점에 남긴 메모)
 
-scaffold 완료. `src/shims/clipboard.ts`만 구현, 나머지는 `TODO.md` 참고. 전체 로드맵은 [landing page](https://apps-in-toss-community.github.io/).
+### clipboard
+- `readText` / `writeText` 만 SDK 경유. `read` / `write` (rich content) 는 토스에 대응 없음 → `NotSupportedError`.
+- EventTarget 메서드는 fallback이 있으면 forwarding, 없으면 silently drop. SDK가 clipboard event를 emit하지 않으므로 의도적으로 lossy.
+
+### geolocation
+- `PositionOptions.enableHighAccuracy` boolean → SDK `Accuracy` enum(numeric) 매핑: `true → High (4)`, `false → Balanced (3)`. `timeout` / `maximumAge`는 SDK가 받지 않으므로 무시한다.
+- 반환되는 `GeolocationPosition` / `GeolocationCoordinates`는 **mutable 플레인 객체**. 실제 DOM은 read-only getter로 노출하지만, shim은 실용성 위해 일반 객체를 반환한다. `position.coords.latitude = 0` 같은 대입은 shim에서는 성공하고 실 브라우저에서는 silently 실패하는 deviation이 있음. 소비자 코드는 위치 정보를 mutate 하지 말 것.
+- SDK `coords`에는 `speed` 필드가 없음 → `null` (spec상 "unknown"). `altitude` / `altitudeAccuracy` / `heading`은 직접 전달(SDK가 number로 주고 spec은 `number | null` 허용).
+- `watchPosition`이 반환하는 numeric watch id는 shim 내부 카운터. SDK `startUpdateLocation`는 `unsubscribe` 클로저를 반환하므로 id → unsubscribe Map으로 매핑. `clearWatch(id)`가 적절한 쪽(`sdkWatches` 또는 `nativeWatches`)을 조회해 정리.
+- `startUpdateLocation`은 `timeInterval` / `distanceInterval`을 요구하지만 web `watchPosition`에는 대응 없음. 기본값 `timeInterval: 1000`, `distanceInterval: 0`로 고정 — 소비자가 세밀히 제어하려면 SDK를 직접 쓰라는 의미.
+
+### share
+- SDK `share`는 단일 `message: string`만 받음. `title` / `text` / `url`을 `\n`로 연결해 하나의 메시지로 만든다. 소비자는 파싱 가능한 markdown 링크 같은 구조를 기대하지 말 것 — 단순 문자열 합성.
+- 빈 `ShareData`({})는 `TypeError`. Web spec도 "must have at least one of …"를 암시.
+- `canShare({ files })`는 Toss 모드에서 `false` (SDK는 file sharing 없음). Browser 모드에서는 native `canShare`에 위임.
+
+### vibrate (best-effort, 의도적으로 lossy)
+- Web `navigator.vibrate`는 **sync에 boolean 반환**, SDK `generateHapticFeedback`은 **async Promise**. 두 semantics를 완전히 화해시키는 것은 불가능. 선택한 trade-off:
+  - shim은 항상 `true`를 sync 반환 (fire-and-forget).
+  - SDK 호출 실패는 삼킨다(spec의 `vibrate`는 에러 surface 경로 없음).
+- Duration → haptic type 매핑:
+  - `< 40ms` → `tickWeak` (짧은 UI feedback)
+  - `≥ 40ms` → `basicMedium` (강한 feedback)
+  - 배열 패턴: 짝수 index만 "on"으로 보고 `tap` 반복, 홀수 index는 `setTimeout` 지연
+- 40ms 문턱값은 임의 heuristic — 짧은 tap 범주와 긴 notification 범주를 가르는 대략적 경계. Android `HapticFeedbackConstants`와 iOS `UIImpactFeedbackGenerator`가 모두 qualitative(CLICK/light/medium/heavy 등)이어서 ms 단위로 정답이 없다. 정확한 vibration pattern reproduction은 불가 — 문서화된 best-effort.
+- 왜 그래도 ship 하는가: mini-app UI가 `navigator.vibrate`를 조건부로 호출하는 패턴이 흔하고, 완전히 dropping 하면 토스 내에서 무감각한 UX가 된다. 불완전해도 "진동 발생" 신호만 전달되면 UX 품질이 올라감.
+
+### network
+- SDK `getNetworkStatus()`는 one-shot async. Web `navigator.onLine`은 sync property getter. Gap을 메우는 방식:
+  - install 시 `getNetworkStatus()`를 non-blocking 호출로 cache seed.
+  - 이후 read마다 background refresh + cached value 반환. 첫 read 전에는 native value (jsdom 기본 `true`) fallback.
+  - `change` 이벤트는 **합성하지 않는다** (Backlog 참고). 전환 감지가 필요하면 소비자가 polling 해야 함.
+- `WIFI` / `WWAN` / `UNKNOWN` → `effectiveType: '4g'` (web에는 "wifi" 값이 없음; "4g"가 "빠른 연결"의 관용적 의미).
+- `type`(비표준, NetworkInformation level 2): `WIFI → 'wifi'`, cellular group → `'cellular'`, `OFFLINE → 'none'`.
+
+## 현재 Status
+
+Tier 1 전부 구현: clipboard · geolocation · share · vibrate · network. 다음은 `sdk-example` 통합을 통한 실환경 검증. 전체 로드맵은 [landing page](https://apps-in-toss-community.github.io/).
