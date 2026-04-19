@@ -12,3 +12,4 @@ Tier 1 표준 Web API shim 추가: `navigator.geolocation`(`getCurrentPosition` 
 - `navigator.connection`의 `change` 이벤트는 실제 상태 전환(예: WIFI → OFFLINE)에만 발생 — 최초 seed의 `null → X` 학습은 이벤트를 발생시키지 않음.
 - 모든 shim은 uninstall 시 instance-level override만 `delete`하여 prototype getter가 다시 노출되도록 한다 (실 브라우저의 non-configurable prototype descriptor 대응). clipboard shim도 같은 패턴으로 정리됨.
 - `navigator.vibrate(0)` / `vibrate([])`은 브라우저에 pass-through되어 spec의 "cancel pending vibration" 의미를 보존 (Toss 모드에서는 SDK cancel API가 없어 no-op).
+- 브라우저 모드에서 `navigator.connection`은 브라우저 네이티브 NetworkInformation 객체를 그대로 반환 (shim이 자체 default로 shadow 하지 않음). Toss seed 전에도 동일하게 네이티브로 fall-through.

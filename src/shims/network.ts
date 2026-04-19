@@ -30,6 +30,14 @@
  * but listeners the consumer attached to the old instance stay bound to that
  * (now-orphan) object and will not see events from a subsequent install.
  * Consumers should re-attach listeners after each install.
+ *
+ * Seed-boundary race: in Toss mode, reads before the install-time SDK seed
+ * completes fall through to the native `navigator.connection`. After the seed
+ * lands, subsequent reads return the shim's ShimConnection. Consumers who
+ * attach `change` listeners before the seed will bind them to the native
+ * object and miss the shim's events. Attach listeners after awaiting at least
+ * one boundary post-install (e.g., after a `navigator.onLine` read that
+ * returns a non-native answer) to guarantee the shim is seeded.
  */
 
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
