@@ -33,11 +33,11 @@
  *
  * Seed-boundary race: in Toss mode, reads before the install-time SDK seed
  * completes fall through to the native `navigator.connection`. After the seed
- * lands, subsequent reads return the shim's ShimConnection. Consumers who
- * attach `change` listeners before the seed will bind them to the native
- * object and miss the shim's events. Attach listeners after awaiting at least
- * one boundary post-install (e.g., after a `navigator.onLine` read that
- * returns a non-native answer) to guarantee the shim is seeded.
+ * lands, subsequent reads return the shim's ShimConnection. Consumers that
+ * specifically need the ShimConnection instance (e.g., to attach `change`
+ * listeners that fire on Toss network transitions) should wait a microtask
+ * after `install()` before attaching listeners, or accept that pre-seed
+ * reads may return the native object.
  */
 
 import { isTossEnvironment, loadTossSdk } from '../detect.js';

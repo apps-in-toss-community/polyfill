@@ -16,7 +16,6 @@
 import { isTossEnvironment, isTossEnvironmentCached, loadTossSdk } from '../detect.js';
 
 const SHARE_BACKUP_KEY = Symbol.for('@ait-co/polyfill/share.original');
-const INSTALLED_KEY = Symbol.for('@ait-co/polyfill/share.installed');
 
 type ShareFn = (data?: ShareData) => Promise<void>;
 type CanShareFn = (data?: ShareData) => boolean;
@@ -30,7 +29,6 @@ interface Backup {
 
 interface BackupHost {
   [SHARE_BACKUP_KEY]?: Backup | undefined;
-  [INSTALLED_KEY]?: true;
 }
 
 function buildSdkMessage(data: ShareData | undefined): string {
@@ -129,7 +127,10 @@ export function installShareShim(): () => void {
   }
 
   const host = navigator as unknown as BackupHost;
-  if (host[INSTALLED_KEY]) {
+  if (SHARE_BACKUP_KEY in host) {
+    // Already installed. Use `in` so the absence of `share` / `canShare` on
+    // the pre-install navigator (legitimately stored as `undefined`) doesn't
+    // re-trigger install.
     return () => uninstallShareShim();
   }
 
@@ -143,7 +144,6 @@ export function installShareShim(): () => void {
     hadShare: 'share' in nav,
     hadCanShare: 'canShare' in nav,
   };
-  host[INSTALLED_KEY] = true;
 
   Object.defineProperty(navigator, 'share', {
     value: shareShim,
@@ -162,7 +162,7 @@ export function installShareShim(): () => void {
 export function uninstallShareShim(): void {
   if (typeof navigator === 'undefined') return;
   const host = navigator as unknown as BackupHost;
-  if (!host[INSTALLED_KEY]) return;
+  if (!(SHARE_BACKUP_KEY in host)) return;
 
   const backup = host[SHARE_BACKUP_KEY];
 
@@ -189,5 +189,4 @@ export function uninstallShareShim(): void {
   }
 
   delete host[SHARE_BACKUP_KEY];
-  delete host[INSTALLED_KEY];
 }
