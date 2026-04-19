@@ -37,6 +37,26 @@ describe('installNetworkShim — browser mode', () => {
     expect(Object.getOwnPropertyDescriptor(navigator, 'onLine')).toBeUndefined();
   });
 
+  it('navigator.connection falls through to the native value when cache is unseeded', () => {
+    // Simulate a real browser that exposes `navigator.connection` on the
+    // prototype. The shim must not shadow it with its own default in
+    // browser mode.
+    const proto = Object.getPrototypeOf(navigator) as object;
+    const origDesc = Object.getOwnPropertyDescriptor(proto, 'connection');
+    const fakeNative = { effectiveType: '3g', type: 'cellular' };
+    Object.defineProperty(proto, 'connection', { configurable: true, get: () => fakeNative });
+
+    try {
+      installNetworkShim();
+      const connection = (navigator as Navigator & { connection?: unknown }).connection;
+      expect(connection).toBe(fakeNative);
+    } finally {
+      uninstallNetworkShim();
+      if (origDesc) Object.defineProperty(proto, 'connection', origDesc);
+      else delete (proto as { connection?: unknown }).connection;
+    }
+  });
+
   it('does not throw when the prototype `onLine` descriptor is non-configurable (simulated real-browser shape)', () => {
     // In real browsers the prototype `onLine` descriptor may be
     // non-configurable. Verify that install/uninstall never tries to mutate

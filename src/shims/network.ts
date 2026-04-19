@@ -8,9 +8,11 @@
  *   - `'2G'/'3G'/'4G'/'5G'` → `onLine = true`, `effectiveType = <lowercased>`
  *   - `'WWAN'/'UNKNOWN'`    → `onLine = true`, `effectiveType = '4g'` (best guess)
  *
- * Outside Apps in Toss → leaves the native `navigator.onLine` /
- * `navigator.connection` in place (install adds shadowing getters that read
- * from the cache, which stays `null`, so reads fall through to native).
+ * Outside Apps in Toss → both `navigator.onLine` and `navigator.connection`
+ * read through to the native value. Install installs own-instance getters
+ * that consult the Toss-seeded cache first; when the cache is empty (which
+ * it always is in browser mode), the getter temporarily removes its own
+ * shadow, reads the prototype value, and reinstates the shadow.
  *
  * Uninstall `delete`s the instance-level override so the prototype descriptor
  * (where `onLine` and `connection` actually live in real browsers) becomes
@@ -200,6 +202,20 @@ export function installNetworkShim(): () => void {
     configurable: true,
     get() {
       void refresh();
+      // Symmetric with `onLine`: when the SDK hasn't seeded us (either a
+      // browser-mode install or pre-seed Toss), read through to the native
+      // `navigator.connection` so consumers in plain browsers don't see a
+      // hardcoded `effectiveType: '4g'` default.
+      if (cachedStatus === null) {
+        const desc = Object.getOwnPropertyDescriptor(navigator, 'connection');
+        delete (navigator as unknown as { connection?: unknown }).connection;
+        try {
+          const native = (navigator as Navigator & { connection?: unknown }).connection;
+          if (native !== undefined) return native;
+        } finally {
+          if (desc) Object.defineProperty(navigator, 'connection', desc);
+        }
+      }
       return connection;
     },
   });
