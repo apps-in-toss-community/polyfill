@@ -20,7 +20,11 @@
  *     a numeric watch id so `clearWatch(id)` behaves like the standard.
  *
  * Caveat: watch ids reset whenever the shim is uninstalled and reinstalled;
- * they are not stable across such cycles.
+ * they are not stable across such cycles. Ids obtained before uninstall
+ * cannot be cleared after uninstall — `clearWatch(id)` on the restored native
+ * `navigator.geolocation` uses a different id space, so the SDK subscription
+ * leaks. Consumers should `clearWatch` all outstanding ids before calling
+ * `uninstall()`.
  */
 
 import { isTossEnvironment, loadTossSdk } from '../detect.js';

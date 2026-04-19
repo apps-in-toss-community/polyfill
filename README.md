@@ -72,6 +72,8 @@ The package is marked `"sideEffects": false`, so unused shims are dropped by any
 | `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` (best-effort, lossy) | 0.1.1 (pending) |
 | `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` (poll on read; no `change` for seed) | 0.1.1 (pending) |
 
+`(pending)` 표시는 해당 행이 아직 npm으로 공개되지 않았다는 뜻입니다. 다음 Version Packages PR이 merge되어 `0.1.1`이 publish되면 이 표시는 제거됩니다.
+
 See [`TODO.md`](./TODO.md) for the full backlog and tiering.
 
 APIs without a reasonable Web standard counterpart (auth, IAP, ads, analytics, Toss-specific environment info) stay in the `@apps-in-toss/web-framework` namespace — polyfill is not the home for "everything the SDK does." Rationale in [`CLAUDE.md`](./CLAUDE.md).

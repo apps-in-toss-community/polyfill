@@ -32,6 +32,11 @@ export const VERSION: string = __VERSION__;
  * Install order: clipboard → geolocation → share → vibrate → network.
  * `uninstall()` tears them down in the same order (each per-shim uninstall is
  * independent, so order doesn't affect correctness; documented for clarity).
+ *
+ * Not atomic on failure: if a later per-shim install throws (e.g., a consumer
+ * has pinned one of the target navigator properties as non-configurable),
+ * earlier shims are already installed. Callers should catch and invoke
+ * `uninstall()` to roll back.
  */
 export function install(): () => void {
   const uninstalls = [

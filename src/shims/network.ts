@@ -19,8 +19,15 @@
  *
  * Caveat: the Web NetworkInformation API is evented (`change` fires on
  * transitions). The SDK exposes only a one-shot query, so listeners attached
- * to `navigator.connection` are accepted but never fire. Synthesising `change`
+ * to `navigator.connection` are accepted but never fire from a `change` event
+ * unless the shim observes a real status transition. Synthesising richer
  * events via polling is tracked in TODO.md.
+ *
+ * Lifecycle: `navigator.connection` is a ShimConnection instance that lives in
+ * the install closure. On uninstall the instance-level override is removed,
+ * but listeners the consumer attached to the old instance stay bound to that
+ * (now-orphan) object and will not see events from a subsequent install.
+ * Consumers should re-attach listeners after each install.
  */
 
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
@@ -69,9 +76,13 @@ function statusToConnectionType(status: SdkNetworkStatus): string {
 }
 
 // Symbol-keyed setter: the install closure can mutate status without exposing
-// a public `setStatus` method on `navigator.connection` (real
-// NetworkInformation has no mutator). Consumers enumerating or discovering the
-// instance still see only the spec-shaped getters.
+// a `setStatus` name on `navigator.connection` (real NetworkInformation has
+// no mutator). `Object.getOwnPropertySymbols(navigator.connection)` returns
+// nothing, so casual enumeration can't find it. A determined caller walking
+// the prototype chain (`Object.getOwnPropertySymbols(Object.getPrototypeOf(...))`)
+// can still surface the symbol — there is no trust boundary between polyfill
+// and consumer code in the same realm, so this is a discouragement, not a
+// security control.
 const SET_STATUS = Symbol('@ait-co/polyfill/network.setStatus');
 
 class ShimConnection extends EventTarget {
