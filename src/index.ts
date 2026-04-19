@@ -2,10 +2,11 @@
  * @ait-co/polyfill
  *
  * Write Apps in Toss mini-apps using standard Web APIs
- * (`navigator.clipboard`, `navigator.geolocation`, …). This polyfill
- * transparently routes calls through the Apps in Toss SDK at runtime when
- * detected, and falls through to the browser's native implementation
- * otherwise.
+ * (`navigator.clipboard`, `navigator.geolocation`, …). This polyfill routes
+ * calls through the Apps in Toss SDK **only when we detect we are actually
+ * running inside the Toss app** — in every other environment (a plain browser,
+ * local dev, tests) the shims are not installed and the browser's native
+ * implementations are used as-is.
  *
  * Unofficial community project. Not affiliated with Toss.
  */
@@ -17,6 +18,7 @@ export { installNetworkShim, uninstallNetworkShim } from './shims/network.js';
 export { installShareShim, uninstallShareShim } from './shims/share.js';
 export { installVibrateShim, uninstallVibrateShim } from './shims/vibrate.js';
 
+import { isTossEnvironment } from './detect.js';
 import { installClipboardShim, uninstallClipboardShim } from './shims/clipboard.js';
 import { installGeolocationShim, uninstallGeolocationShim } from './shims/geolocation.js';
 import { installNetworkShim, uninstallNetworkShim } from './shims/network.js';
@@ -25,20 +27,24 @@ import { installVibrateShim, uninstallVibrateShim } from './shims/vibrate.js';
 
 export const VERSION: string = __VERSION__;
 
+const NOOP = (): void => {};
+
 /**
- * Install every shim this library ships. Idempotent — safe to call more than
- * once. Returns an uninstall function that restores every original API.
+ * Install every shim this library ships, but only if we detect an Apps in
+ * Toss runtime. In a plain browser `install()` is a no-op — the browser's
+ * native APIs stay untouched.
  *
- * Install order: clipboard → geolocation → share → vibrate → network.
- * `uninstall()` tears them down in the same order (each per-shim uninstall is
- * independent, so order doesn't affect correctness; documented for clarity).
+ * Returns a promise that resolves with an uninstall function. If the
+ * environment turns out not to be Toss, the uninstall function is a no-op.
  *
- * Not atomic on failure: if a later per-shim install throws (e.g., a consumer
- * has pinned one of the target navigator properties as non-configurable),
- * earlier shims are already installed. Callers should catch and invoke
- * `uninstall()` to roll back.
+ * Install order (when active): clipboard → geolocation → share → vibrate →
+ * network. Not atomic on failure — if a per-shim install throws (e.g., a
+ * consumer pinned a target navigator property as non-configurable), earlier
+ * shims are already in place. Callers should catch and invoke the returned
+ * uninstall to roll back.
  */
-export function install(): () => void {
+export async function install(): Promise<() => void> {
+  if (!(await isTossEnvironment())) return NOOP;
   const uninstalls = [
     installClipboardShim(),
     installGeolocationShim(),

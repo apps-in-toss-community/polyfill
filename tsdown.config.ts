@@ -67,4 +67,9 @@ export default defineConfig([
     entry: { detect: 'src/detect.ts' },
     format: ['esm'],
   },
+  {
+    ...common,
+    entry: { auto: 'src/auto.ts' },
+    format: ['esm'],
+  },
 ]);
