@@ -2,46 +2,39 @@
  * `navigator.onLine` + `navigator.connection` shim.
  *
  * Inside Apps in Toss → seeded from SDK `getNetworkStatus()` on install and
- * refreshed on each read:
+ * refreshed on read (throttled):
  *   - `'OFFLINE'`   → `onLine = false`
  *   - `'WIFI'`      → `onLine = true`, `effectiveType = '4g'` (no web wifi value)
  *   - `'2G'/'3G'/'4G'/'5G'` → `onLine = true`, `effectiveType = <lowercased>`
  *   - `'WWAN'/'UNKNOWN'`    → `onLine = true`, `effectiveType = '4g'` (best guess)
  *
  * Outside Apps in Toss → leaves the native `navigator.onLine` /
- * `navigator.connection` in place.
+ * `navigator.connection` in place (install adds shadowing getters that read
+ * from the cache, which stays `null`, so reads fall through to native).
+ *
+ * Uninstall `delete`s the instance-level override so the prototype descriptor
+ * (where `onLine` and `connection` actually live in real browsers) becomes
+ * visible again. We never mutate the prototype — doing so would throw in
+ * browsers where the descriptor is non-configurable.
  *
  * Caveat: the Web NetworkInformation API is evented (`change` fires on
- * transitions). The SDK exposes only a one-shot query, so our shim polls
- * lazily on property read; we do **not** synthesize `change` events.
+ * transitions). The SDK exposes only a one-shot query, so listeners attached
+ * to `navigator.connection` are accepted but never fire. Synthesising `change`
+ * events via polling is tracked in TODO.md.
  */
 
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
 
-const ONLINE_BACKUP_KEY = Symbol.for('@ait-co/polyfill/onLine.original');
-const CONNECTION_BACKUP_KEY = Symbol.for('@ait-co/polyfill/connection.original');
 const INSTALLED_KEY = Symbol.for('@ait-co/polyfill/network.installed');
 
 interface BackupHost {
-  [ONLINE_BACKUP_KEY]?: PropertyDescriptor | undefined;
-  [CONNECTION_BACKUP_KEY]?: PropertyDescriptor | undefined;
   [INSTALLED_KEY]?: boolean;
 }
 
 type SdkNetworkStatus = 'OFFLINE' | 'WIFI' | '2G' | '3G' | '4G' | '5G' | 'WWAN' | 'UNKNOWN';
 type EffectiveType = 'slow-2g' | '2g' | '3g' | '4g';
 
-interface ConnectionLike {
-  readonly effectiveType: EffectiveType;
-  readonly downlink: number;
-  readonly rtt: number;
-  readonly saveData: boolean;
-  readonly type: string;
-}
-
-// Cached so synchronous reads can return immediately. Refresh runs in the
-// background; the next read sees the updated values.
-let cachedStatus: SdkNetworkStatus | null = null;
+const REFRESH_THROTTLE_MS = 500;
 
 function statusToOnline(status: SdkNetworkStatus): boolean {
   return status !== 'OFFLINE';
@@ -53,12 +46,6 @@ function statusToEffectiveType(status: SdkNetworkStatus): EffectiveType {
       return '2g';
     case '3G':
       return '3g';
-    case '4G':
-    case '5G':
-    case 'WIFI':
-    case 'WWAN':
-    case 'UNKNOWN':
-      return '4g';
     default:
       return '4g';
   }
@@ -81,30 +68,36 @@ function statusToConnectionType(status: SdkNetworkStatus): string {
   }
 }
 
-async function refresh(): Promise<void> {
-  if (!(await isTossEnvironment())) return;
-  const sdk = await loadTossSdk();
-  const fn = (sdk as { getNetworkStatus?: unknown } | null)?.getNetworkStatus;
-  if (typeof fn === 'function') {
-    try {
-      cachedStatus = (await (fn as () => Promise<SdkNetworkStatus>)()) as SdkNetworkStatus;
-    } catch {
-      // Keep prior cache on failure.
-    }
-  }
-}
+class ShimConnection extends EventTarget {
+  // Exposed so the network shim closure can update the value without
+  // reconstructing the instance (listeners stay attached).
+  _status: SdkNetworkStatus | null = null;
+  onchange: ((this: ShimConnection, ev: Event) => unknown) | null = null;
 
-function makeConnection(): ConnectionLike {
-  const status = cachedStatus ?? 'UNKNOWN';
-  // Kick off refresh for subsequent reads. Fire-and-forget.
-  void refresh();
-  return {
-    effectiveType: statusToEffectiveType(status),
-    downlink: 10,
-    rtt: 50,
-    saveData: false,
-    type: statusToConnectionType(status),
-  };
+  constructor() {
+    super();
+    // Forward `change` events to the legacy `onchange` handler for parity with
+    // the NetworkInformation API.
+    this.addEventListener('change', (ev) => this.onchange?.call(this, ev));
+  }
+
+  get effectiveType(): EffectiveType {
+    return statusToEffectiveType(this._status ?? 'UNKNOWN');
+  }
+  // `downlink` / `rtt` are placeholders — the SDK does not expose these. We
+  // return 0 with a comment rather than fabricate plausible numbers.
+  get downlink(): number {
+    return 0;
+  }
+  get rtt(): number {
+    return 0;
+  }
+  get saveData(): boolean {
+    return false;
+  }
+  get type(): string {
+    return statusToConnectionType(this._status ?? 'UNKNOWN');
+  }
 }
 
 export function installNetworkShim(): () => void {
@@ -116,15 +109,39 @@ export function installNetworkShim(): () => void {
   if (host[INSTALLED_KEY]) {
     return () => uninstallNetworkShim();
   }
-
-  host[ONLINE_BACKUP_KEY] = Object.getOwnPropertyDescriptor(
-    Object.getPrototypeOf(navigator) ?? navigator,
-    'onLine',
-  );
-  host[CONNECTION_BACKUP_KEY] = Object.getOwnPropertyDescriptor(navigator, 'connection');
   host[INSTALLED_KEY] = true;
 
-  // Seed the cache on install so the first sync read is meaningful.
+  // Per-install state. Kept in closure so uninstall/reinstall cycles don't
+  // leak state between instances (module-scope would leak across tests).
+  let cachedStatus: SdkNetworkStatus | null = null;
+  let lastRefresh = 0;
+  const connection = new ShimConnection();
+
+  async function refresh(): Promise<void> {
+    const now = Date.now();
+    if (now - lastRefresh < REFRESH_THROTTLE_MS) return;
+    lastRefresh = now;
+    if (!(await isTossEnvironment())) return;
+    const sdk = await loadTossSdk();
+    const fn = (sdk as { getNetworkStatus?: unknown } | null)?.getNetworkStatus;
+    if (typeof fn === 'function') {
+      try {
+        const next = (await (fn as () => Promise<SdkNetworkStatus>)()) as SdkNetworkStatus;
+        const changed = cachedStatus !== next;
+        cachedStatus = next;
+        connection._status = next;
+        if (changed) {
+          connection.dispatchEvent(new Event('change'));
+        }
+      } catch {
+        // Keep prior cache on failure.
+      }
+    }
+  }
+
+  // Seed the cache on install so the first sync read is meaningful. Bypass
+  // the throttle for this seed call.
+  lastRefresh = 0;
   void refresh();
 
   Object.defineProperty(navigator, 'onLine', {
@@ -134,17 +151,21 @@ export function installNetworkShim(): () => void {
       if (cachedStatus !== null) {
         return statusToOnline(cachedStatus);
       }
-      // Fall back to the native answer if we have no SDK data yet.
-      const original = host[ONLINE_BACKUP_KEY];
-      if (original?.get) return original.get.call(navigator);
-      return true;
+      // Fall back to whatever the prototype would have returned. Deleting our
+      // shadow temporarily is the cleanest way to read through.
+      const desc = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+      delete (navigator as unknown as { onLine?: boolean }).onLine;
+      const native = navigator.onLine;
+      if (desc) Object.defineProperty(navigator, 'onLine', desc);
+      return native;
     },
   });
 
   Object.defineProperty(navigator, 'connection', {
     configurable: true,
     get() {
-      return makeConnection();
+      void refresh();
+      return connection;
     },
   });
 
@@ -156,23 +177,11 @@ export function uninstallNetworkShim(): void {
   const host = navigator as unknown as BackupHost;
   if (!host[INSTALLED_KEY]) return;
 
-  const originalOnLine = host[ONLINE_BACKUP_KEY];
-  const originalConnection = host[CONNECTION_BACKUP_KEY];
+  // `delete` the instance-level property so the prototype descriptor (where
+  // `onLine` and `connection` actually live in real browsers) is exposed
+  // again. Redefining the prototype would throw on non-configurable getters.
+  delete (navigator as unknown as { onLine?: boolean }).onLine;
+  delete (navigator as unknown as { connection?: unknown }).connection;
 
-  // Delete our override on the instance so the prototype descriptor (or
-  // nothing) shows through again.
-  delete (navigator as unknown as Record<string, unknown>).onLine;
-  delete (navigator as unknown as Record<string, unknown>).connection;
-
-  if (originalOnLine) {
-    Object.defineProperty(Object.getPrototypeOf(navigator) ?? navigator, 'onLine', originalOnLine);
-  }
-  if (originalConnection) {
-    Object.defineProperty(navigator, 'connection', originalConnection);
-  }
-
-  delete host[ONLINE_BACKUP_KEY];
-  delete host[CONNECTION_BACKUP_KEY];
   delete host[INSTALLED_KEY];
-  cachedStatus = null;
 }

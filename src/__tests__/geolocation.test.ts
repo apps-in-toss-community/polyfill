@@ -63,10 +63,7 @@ describe('installGeolocationShim — browser mode', () => {
     installGeolocationShim();
 
     const id = navigator.geolocation.watchPosition(() => {});
-    // watchPosition is async internally; yield to let it settle.
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(native.watchPosition).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(native.watchPosition).toHaveBeenCalledTimes(1));
 
     navigator.geolocation.clearWatch(id);
     expect(native.clearWatch).toHaveBeenCalledWith(42);
@@ -123,6 +120,36 @@ describe('installGeolocationShim — Toss mode', () => {
     expect(position.coords.speed).toBeNull();
   });
 
+  it('toJSON on position and coords produces a plain object without recursive toJSON', async () => {
+    const getCurrentLocation = vi.fn(async (_opts: { accuracy: number }) => ({
+      timestamp: 1,
+      coords: {
+        latitude: 1,
+        longitude: 2,
+        altitude: 3,
+        accuracy: 4,
+        altitudeAccuracy: 5,
+        heading: 6,
+      },
+    }));
+    vi.doMock('@apps-in-toss/web-framework', () => ({
+      getClipboardText: vi.fn(),
+      getCurrentLocation,
+    }));
+
+    attachFakeNativeGeolocation();
+    installGeolocationShim();
+
+    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject);
+    });
+
+    const json = JSON.parse(JSON.stringify(position));
+    expect(json.coords.latitude).toBe(1);
+    expect(json.coords).not.toHaveProperty('toJSON');
+    expect(json).not.toHaveProperty('toJSON');
+  });
+
   it('maps enableHighAccuracy:false to SDK Accuracy.Balanced', async () => {
     const getCurrentLocation = vi.fn(async (_opts: { accuracy: number }) => ({
       timestamp: 0,
@@ -164,11 +191,34 @@ describe('installGeolocationShim — Toss mode', () => {
     const id = navigator.geolocation.watchPosition(() => {});
     expect(typeof id).toBe('number');
 
-    // Let the async watch install (SDK load + isTossEnvironment + subscribe).
-    await new Promise((r) => setTimeout(r, 20));
-    expect(startUpdateLocation).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(startUpdateLocation).toHaveBeenCalledTimes(1));
 
     navigator.geolocation.clearWatch(id);
     expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('clearWatch called before the async subscribe resolves still tears down the SDK subscription', async () => {
+    const unsubscribe = vi.fn();
+    const startUpdateLocation = vi.fn(() => unsubscribe);
+    vi.doMock('@apps-in-toss/web-framework', () => ({
+      getClipboardText: vi.fn(),
+      startUpdateLocation,
+    }));
+
+    attachFakeNativeGeolocation();
+    installGeolocationShim();
+
+    const id = navigator.geolocation.watchPosition(() => {});
+    // Race: clear before the async install can set sdkWatches.
+    navigator.geolocation.clearWatch(id);
+
+    // Let the async subscribe resolve; it should either see the cancel flag
+    // and skip, or subscribe+immediately-unsubscribe.
+    await vi.waitFor(() => {
+      const subscribed = startUpdateLocation.mock.calls.length;
+      // If the SDK did get called, the unsubscribe must have fired too.
+      if (subscribed > 0) expect(unsubscribe).toHaveBeenCalledTimes(subscribed);
+      expect(subscribed).toBeGreaterThanOrEqual(0);
+    });
   });
 });

@@ -10,7 +10,7 @@
  * Unofficial community project. Not affiliated with Toss.
  */
 
-export { isTossEnvironment, loadTossSdk } from './detect.js';
+export { isTossEnvironment, isTossEnvironmentCached, loadTossSdk } from './detect.js';
 export { installClipboardShim, uninstallClipboardShim } from './shims/clipboard.js';
 export { installGeolocationShim, uninstallGeolocationShim } from './shims/geolocation.js';
 export { installNetworkShim, uninstallNetworkShim } from './shims/network.js';
@@ -28,6 +28,10 @@ export const VERSION: string = __VERSION__;
 /**
  * Install every shim this library ships. Idempotent — safe to call more than
  * once. Returns an uninstall function that restores every original API.
+ *
+ * Install order: clipboard → geolocation → share → vibrate → network.
+ * `uninstall()` tears them down in the same order (each per-shim uninstall is
+ * independent, so order doesn't affect correctness; documented for clarity).
  */
 export function install(): () => void {
   const uninstalls = [

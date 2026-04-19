@@ -16,7 +16,6 @@ describe('installNetworkShim — browser mode', () => {
 
   it('falls back to a truthy onLine when SDK is absent', () => {
     installNetworkShim();
-    // jsdom defaults onLine to true; the shim respects that when cache empty.
     expect(navigator.onLine).toBe(true);
   });
 
@@ -25,6 +24,33 @@ describe('installNetworkShim — browser mode', () => {
     uninstallNetworkShim();
     // After uninstall, onLine should still be accessible (native descriptor restored).
     expect(typeof navigator.onLine).toBe('boolean');
+  });
+
+  it('uninstall removes instance-level overrides so the prototype getter shows through', () => {
+    installNetworkShim();
+    // While installed, `onLine` is an own getter on navigator.
+    expect(Object.getOwnPropertyDescriptor(navigator, 'onLine')).toBeDefined();
+
+    uninstallNetworkShim();
+    // After uninstall, the own property is gone; prototype getter (jsdom's)
+    // takes over.
+    expect(Object.getOwnPropertyDescriptor(navigator, 'onLine')).toBeUndefined();
+  });
+
+  it('does not throw when the prototype `onLine` descriptor is non-configurable (simulated real-browser shape)', () => {
+    // In real browsers the prototype `onLine` descriptor may be
+    // non-configurable. Verify that install/uninstall never tries to mutate
+    // the prototype (it would throw otherwise).
+    const proto = Object.getPrototypeOf(navigator) as object;
+    const beforeDesc = Object.getOwnPropertyDescriptor(proto, 'onLine');
+
+    expect(() => {
+      const off = installNetworkShim();
+      off();
+    }).not.toThrow();
+
+    const afterDesc = Object.getOwnPropertyDescriptor(proto, 'onLine');
+    expect(afterDesc).toEqual(beforeDesc);
   });
 });
 
@@ -49,8 +75,7 @@ describe('installNetworkShim — Toss mode', () => {
     }));
 
     installNetworkShim();
-    // Let the install-time refresh settle.
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => expect(getNetworkStatus).toHaveBeenCalled());
 
     expect(navigator.onLine).toBe(true);
     const connection = (
@@ -68,9 +93,7 @@ describe('installNetworkShim — Toss mode', () => {
     }));
 
     installNetworkShim();
-    await new Promise((r) => setTimeout(r, 10));
-
-    expect(navigator.onLine).toBe(false);
+    await vi.waitFor(() => expect(navigator.onLine).toBe(false));
   });
 
   it('maps 3G to effectiveType=3g', async () => {
@@ -81,10 +104,35 @@ describe('installNetworkShim — Toss mode', () => {
     }));
 
     installNetworkShim();
-    await new Promise((r) => setTimeout(r, 10));
+    await vi.waitFor(() => {
+      const connection = (navigator as Navigator & { connection?: { effectiveType: string } })
+        .connection;
+      expect(connection?.effectiveType).toBe('3g');
+    });
+  });
 
-    const connection = (navigator as Navigator & { connection?: { effectiveType: string } })
+  it('returns a stable `connection` reference across reads so EventTarget listeners stick', async () => {
+    const getNetworkStatus = vi.fn(async () => 'WIFI');
+    vi.doMock('@apps-in-toss/web-framework', () => ({
+      getClipboardText: vi.fn(),
+      getNetworkStatus,
+    }));
+
+    installNetworkShim();
+    const a = (navigator as Navigator & { connection?: EventTarget }).connection;
+    const b = (navigator as Navigator & { connection?: EventTarget }).connection;
+    expect(a).toBe(b);
+
+    const listener = vi.fn();
+    a?.addEventListener('change', listener);
+    a?.dispatchEvent(new Event('change'));
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('connection object supports addEventListener (NetworkInformation is an EventTarget)', () => {
+    installNetworkShim();
+    const connection = (navigator as Navigator & { connection?: { addEventListener?: unknown } })
       .connection;
-    expect(connection?.effectiveType).toBe('3g');
+    expect(typeof connection?.addEventListener).toBe('function');
   });
 });

@@ -1,13 +1,12 @@
 # @ait-co/polyfill
 
-> 🚧 **Work in Progress** — not yet published.
-> 아직 개발 중입니다. 릴리스 전입니다.
+> 🚧 **Pre-release (0.1.x)** — implemented, pending `sdk-example` integration verification.
+> Part of the unofficial `apps-in-toss-community` project. Not affiliated with Toss / Viva Republica.
+> 비공식 커뮤니티 프로젝트입니다. 토스와 제휴하지 않았습니다.
 
-Web standard API polyfill for [Apps in Toss](https://toss.im/) mini-apps. Write your mini-app with **standard Web APIs** (`navigator.clipboard`, `navigator.geolocation`, …) and have it transparently work inside Apps in Toss.
+Web standard API polyfill for Apps in Toss mini-apps. Write your mini-app with **standard Web APIs** (`navigator.clipboard`, `navigator.geolocation`, …) and have it transparently work inside Apps in Toss.
 
 앱인토스 미니앱에서 **웹 표준 API를 그대로 사용**해서 개발할 수 있게 해주는 polyfill. 런타임에 앱인토스 환경을 감지해 내부적으로 `@apps-in-toss/web-framework` 호출로 라우팅하고, 그 외 환경(일반 브라우저, 로컬 개발, 테스트)에서는 브라우저의 원본 구현을 그대로 사용합니다 — no-op shim이 아닙니다.
-
-Part of the unofficial `apps-in-toss-community` project. Not affiliated with Toss.
 
 ## Install
 
@@ -64,13 +63,13 @@ The package is marked `"sideEffects": false`, so unused shims are dropped by any
 
 | Web standard | SDK counterpart | Status |
 |---|---|---|
-| `navigator.clipboard.readText()` | `getClipboardText()` | ✅ shipped |
-| `navigator.clipboard.writeText(text)` | `setClipboardText(text)` | ✅ shipped |
-| `navigator.geolocation.getCurrentPosition()` | `getCurrentLocation({ accuracy })` | ✅ shipped |
-| `navigator.geolocation.watchPosition()` / `clearWatch()` | `startUpdateLocation(...)` | ✅ shipped |
-| `navigator.share({ title, text, url })` | `share({ message })` | ✅ shipped (concatenates into `message`) |
-| `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` | ✅ shipped (best-effort, lossy mapping) |
-| `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` | ✅ shipped (poll on read; no `change` events) |
+| `navigator.clipboard.readText()` | `getClipboardText()` | 🟡 implemented, pending sdk-example verification |
+| `navigator.clipboard.writeText(text)` | `setClipboardText(text)` | 🟡 implemented, pending sdk-example verification |
+| `navigator.geolocation.getCurrentPosition()` | `getCurrentLocation({ accuracy })` | 🟡 implemented, pending sdk-example verification |
+| `navigator.geolocation.watchPosition()` / `clearWatch()` | `startUpdateLocation(...)` | 🟡 implemented, pending sdk-example verification |
+| `navigator.share({ title, text, url })` | `share({ message })` | 🟡 implemented, pending sdk-example verification (concatenates into `message`) |
+| `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` | 🟡 implemented, pending sdk-example verification (best-effort, lossy mapping) |
+| `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` | 🟡 implemented, pending sdk-example verification (poll on read; no `change` events) |
 
 See [`TODO.md`](./TODO.md) for the full backlog and tiering.
 

@@ -1,32 +1,47 @@
 /**
  * `navigator.share` shim.
  *
- * Inside Apps in Toss → routes through SDK `share({ message })`.
- * The SDK only accepts a single `message` string, so we concatenate
- * `title`, `text`, and `url` with newline separators (skipping empties).
+ * Inside Apps in Toss → routes through SDK `share({ message })`. The SDK only
+ * accepts a single `message` string, so we concatenate `title`, `text`, and
+ * `url` with newline separators (skipping missing/empty values).
  *
- * Outside Apps in Toss → defers to the browser's native `navigator.share`,
- * or throws `NotSupportedError` if unavailable.
+ * Outside Apps in Toss → defers to the browser's native `navigator.share`, or
+ * throws `NotSupportedError` if unavailable.
  *
  * Caveat: the SDK's share has no counterpart for `files` (Web Share Level 2).
- * `canShare({ files })` returns `false` in Toss mode.
+ * `canShare({ files })` returns `false` whenever the sync-accessible detection
+ * says Toss is active (or is being forced via the test override).
  */
 
-import { isTossEnvironment, loadTossSdk } from '../detect.js';
+import { isTossEnvironment, isTossEnvironmentCached, loadTossSdk } from '../detect.js';
 
 const SHARE_BACKUP_KEY = Symbol.for('@ait-co/polyfill/share.original');
 const CAN_SHARE_BACKUP_KEY = Symbol.for('@ait-co/polyfill/canShare.original');
+const INSTALLED_KEY = Symbol.for('@ait-co/polyfill/share.installed');
+
+type ShareFn = (data?: ShareData) => Promise<void>;
+type CanShareFn = (data?: ShareData) => boolean;
+
+interface Backup {
+  share?: ShareFn | undefined;
+  canShare?: CanShareFn | undefined;
+  hadShare: boolean;
+  hadCanShare: boolean;
+}
 
 interface BackupHost {
-  [SHARE_BACKUP_KEY]?: ((data?: ShareData) => Promise<void>) | undefined;
-  [CAN_SHARE_BACKUP_KEY]?: ((data?: ShareData) => boolean) | undefined;
+  [SHARE_BACKUP_KEY]?: Backup | undefined;
+  [CAN_SHARE_BACKUP_KEY]?: never;
+  [INSTALLED_KEY]?: boolean;
 }
 
 function buildSdkMessage(data: ShareData | undefined): string {
+  // Use presence checks rather than truthiness so an intentionally empty
+  // string in one field is handled correctly alongside a non-empty sibling.
   const parts: string[] = [];
-  if (data?.title) parts.push(data.title);
-  if (data?.text) parts.push(data.text);
-  if (data?.url) parts.push(data.url);
+  if (data?.title != null && data.title !== '') parts.push(data.title);
+  if (data?.text != null && data.text !== '') parts.push(data.text);
+  if (data?.url != null && data.url !== '') parts.push(data.url);
   return parts.join('\n');
 }
 
@@ -41,12 +56,20 @@ async function shareShim(data?: ShareData): Promise<void> {
           '[@ait-co/polyfill] navigator.share requires at least one of title, text, or url.',
         );
       }
-      await (fn as (o: { message: string }) => Promise<void>)({ message });
+      try {
+        await (fn as (o: { message: string }) => Promise<void>)({ message });
+      } catch (e) {
+        // Spec says navigator.share rejects with a DOMException. Wrap SDK
+        // errors as AbortError (the most common cause is user cancellation).
+        const message_ = e instanceof Error ? e.message : String(e);
+        throw new DOMException(message_, 'AbortError');
+      }
       return;
     }
   }
   const host = navigator as unknown as BackupHost;
-  const original = host[SHARE_BACKUP_KEY];
+  const backup = host[SHARE_BACKUP_KEY];
+  const original = backup?.share;
   if (!original) {
     throw new DOMException(
       '[@ait-co/polyfill] navigator.share is not available in this environment.',
@@ -57,22 +80,27 @@ async function shareShim(data?: ShareData): Promise<void> {
 }
 
 function canShareShim(data?: ShareData): boolean {
-  // The SDK's `share` does not handle files; advertise that honestly.
-  if (data?.files && data.files.length > 0) {
-    // In browser mode we still want to delegate so browsers that *do* support
-    // file sharing can return true. Detection is async, so this must be a
-    // best-effort sync answer. If a fallback exists, trust it.
-    const host = navigator as unknown as BackupHost;
-    const originalCanShare = host[CAN_SHARE_BACKUP_KEY];
-    if (originalCanShare) {
-      return originalCanShare.call(navigator, data);
-    }
-    return false;
+  const hasFiles = Boolean(data?.files && data.files.length > 0);
+  const toss = isTossEnvironmentCached();
+
+  if (hasFiles) {
+    // SDK does not share files. If we know we're in Toss (or it's being
+    // forced), say so honestly. If detection hasn't resolved yet, be
+    // pessimistic — a false negative is safer than promising a capability
+    // we'll turn around and deny.
+    if (toss === true) return false;
+    if (toss === undefined) return false;
   }
-  // Anything with at least one of title/text/url is shareable in Toss; in a
-  // browser, delegate to native when available.
+
+  // Toss with non-file payloads: true iff there's at least one field.
+  if (toss === true) {
+    return Boolean(data?.title || data?.text || data?.url);
+  }
+
+  // Browser path: delegate to native when present.
   const host = navigator as unknown as BackupHost;
-  const originalCanShare = host[CAN_SHARE_BACKUP_KEY];
+  const backup = host[SHARE_BACKUP_KEY];
+  const originalCanShare = backup?.canShare;
   if (originalCanShare) {
     return originalCanShare.call(navigator, data);
   }
@@ -85,16 +113,21 @@ export function installShareShim(): () => void {
   }
 
   const host = navigator as unknown as BackupHost;
-  if (SHARE_BACKUP_KEY in host) {
+  if (host[INSTALLED_KEY]) {
     return () => uninstallShareShim();
   }
 
-  const originalShare = (navigator as Navigator & { share?: (d?: ShareData) => Promise<void> })
-    .share;
-  const originalCanShare = (navigator as Navigator & { canShare?: (d?: ShareData) => boolean })
-    .canShare;
-  host[SHARE_BACKUP_KEY] = originalShare;
-  host[CAN_SHARE_BACKUP_KEY] = originalCanShare;
+  const nav = navigator as Navigator & {
+    share?: ShareFn;
+    canShare?: CanShareFn;
+  };
+  host[SHARE_BACKUP_KEY] = {
+    share: nav.share,
+    canShare: nav.canShare,
+    hadShare: 'share' in nav,
+    hadCanShare: 'canShare' in nav,
+  };
+  host[INSTALLED_KEY] = true;
 
   Object.defineProperty(navigator, 'share', {
     value: shareShim,
@@ -113,20 +146,32 @@ export function installShareShim(): () => void {
 export function uninstallShareShim(): void {
   if (typeof navigator === 'undefined') return;
   const host = navigator as unknown as BackupHost;
-  if (!(SHARE_BACKUP_KEY in host)) return;
+  if (!host[INSTALLED_KEY]) return;
 
-  const originalShare = host[SHARE_BACKUP_KEY];
-  const originalCanShare = host[CAN_SHARE_BACKUP_KEY];
-  Object.defineProperty(navigator, 'share', {
-    value: originalShare,
-    configurable: true,
-    writable: true,
-  });
-  Object.defineProperty(navigator, 'canShare', {
-    value: originalCanShare,
-    configurable: true,
-    writable: true,
-  });
+  const backup = host[SHARE_BACKUP_KEY];
+
+  // Restore the original property shape: if the browser originally had no
+  // `share` / `canShare`, `delete` so feature-detection (`'share' in navigator`)
+  // returns the true pre-install answer. Otherwise write the original back.
+  if (backup?.hadShare) {
+    Object.defineProperty(navigator, 'share', {
+      value: backup.share,
+      configurable: true,
+      writable: true,
+    });
+  } else {
+    delete (navigator as unknown as { share?: ShareFn }).share;
+  }
+  if (backup?.hadCanShare) {
+    Object.defineProperty(navigator, 'canShare', {
+      value: backup.canShare,
+      configurable: true,
+      writable: true,
+    });
+  } else {
+    delete (navigator as unknown as { canShare?: CanShareFn }).canShare;
+  }
+
   delete host[SHARE_BACKUP_KEY];
-  delete host[CAN_SHARE_BACKUP_KEY];
+  delete host[INSTALLED_KEY];
 }

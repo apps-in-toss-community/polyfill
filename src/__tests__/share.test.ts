@@ -84,6 +84,25 @@ describe('installShareShim — Toss mode', () => {
     });
   });
 
+  it('wraps SDK rejection as DOMException(AbortError)', async () => {
+    const share = vi.fn(async () => {
+      throw new Error('user cancelled');
+    });
+    vi.doMock('@apps-in-toss/web-framework', () => ({
+      getClipboardText: vi.fn(),
+      share,
+    }));
+
+    attachFakeNativeShare();
+    installShareShim();
+
+    await expect(
+      (navigator as Navigator & { share: (d?: ShareData) => Promise<void> }).share({
+        text: 'hi',
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
   it('throws TypeError on empty ShareData', async () => {
     vi.doMock('@apps-in-toss/web-framework', () => ({
       getClipboardText: vi.fn(),
@@ -97,6 +116,22 @@ describe('installShareShim — Toss mode', () => {
       (navigator as Navigator & { share: (d?: ShareData) => Promise<void> }).share({}),
     ).rejects.toThrow(TypeError);
   });
+
+  it('canShare({ files }) returns false in Toss mode even when native says true', () => {
+    vi.doMock('@apps-in-toss/web-framework', () => ({
+      getClipboardText: vi.fn(),
+      share: vi.fn(),
+    }));
+
+    attachFakeNativeShare();
+    installShareShim();
+
+    const file = new Blob(['x']) as unknown as File;
+    const result = (navigator as Navigator & { canShare: (d?: ShareData) => boolean }).canShare({
+      files: [file],
+    });
+    expect(result).toBe(false);
+  });
 });
 
 describe('installShareShim — neither Toss nor browser share', () => {
@@ -108,16 +143,9 @@ describe('installShareShim — neither Toss nor browser share', () => {
     globalThis.__AIT_POLYFILL_FORCE__ = 'browser';
     originalShare = Object.getOwnPropertyDescriptor(navigator, 'share');
     originalCanShare = Object.getOwnPropertyDescriptor(navigator, 'canShare');
-    Object.defineProperty(navigator, 'share', {
-      value: undefined,
-      configurable: true,
-      writable: true,
-    });
-    Object.defineProperty(navigator, 'canShare', {
-      value: undefined,
-      configurable: true,
-      writable: true,
-    });
+    // Delete entirely so 'share' in navigator is false.
+    delete (navigator as unknown as { share?: unknown }).share;
+    delete (navigator as unknown as { canShare?: unknown }).canShare;
   });
 
   afterEach(() => {
@@ -134,5 +162,12 @@ describe('installShareShim — neither Toss nor browser share', () => {
     await expect(
       (navigator as Navigator & { share: (d?: ShareData) => Promise<void> }).share({ text: 'x' }),
     ).rejects.toMatchObject({ name: 'NotSupportedError' });
+  });
+
+  it('uninstall restores the pre-install shape: no orphan share property when it did not exist', () => {
+    installShareShim();
+    uninstallShareShim();
+    expect('share' in navigator).toBe(false);
+    expect('canShare' in navigator).toBe(false);
   });
 });

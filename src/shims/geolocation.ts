@@ -6,15 +6,21 @@
  *   - `watchPosition` / `clearWatch` → `startUpdateLocation({ onEvent, onError, options })`
  *
  * Outside Apps in Toss → defers to the browser's native `navigator.geolocation`.
- * If neither is available, the callbacks receive a standard `GeolocationPositionError`.
+ * If neither is available, the error callback receives a `GeolocationPositionError`.
  *
  * SDK/Web shape mismatch handled here:
  *   - SDK `Accuracy` is a numeric enum (1 = Lowest … 6 = BestForNavigation); the
  *     standard `PositionOptions.enableHighAccuracy` is a boolean. We map
- *     `true → Accuracy.High (4)` and `false → Accuracy.Balanced (3)`.
+ *     `true → Accuracy.High (4, "~10m")` and `false → Accuracy.Balanced (3)`.
+ *     `Highest (5)` / `BestForNavigation (6)` are available but carry a battery
+ *     cost that's rarely what mini-apps want; consumers who need them should
+ *     call the SDK directly.
  *   - SDK coords lack `speed`; we surface `null` (per the W3C spec when unknown).
  *   - SDK `startUpdateLocation` returns an `unsubscribe` fn; we wrap it behind
  *     a numeric watch id so `clearWatch(id)` behaves like the standard.
+ *
+ * Caveat: watch ids reset whenever the shim is uninstalled and reinstalled;
+ * they are not stable across such cycles.
  */
 
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
@@ -26,7 +32,8 @@ interface BackupHost {
 }
 
 // SDK Accuracy enum values. We don't import the enum at runtime (peer is
-// optional), so we hard-code the numeric constants used by the SDK.
+// optional), so we hard-code the numeric constants used by the SDK. Stable
+// ABI per the SDK's exported numeric enum.
 const ACCURACY_BALANCED = 3;
 const ACCURACY_HIGH = 4;
 
@@ -45,7 +52,7 @@ interface SdkLocation {
 }
 
 function toStandardPosition(sdk: SdkLocation): GeolocationPosition {
-  const coords: GeolocationCoordinates = {
+  const coordsData = {
     latitude: sdk.coords.latitude,
     longitude: sdk.coords.longitude,
     altitude: sdk.coords.altitude,
@@ -54,30 +61,42 @@ function toStandardPosition(sdk: SdkLocation): GeolocationPosition {
     heading: sdk.coords.heading,
     // SDK does not surface speed. Per spec, null means "unknown".
     speed: null,
+  };
+  const coords: GeolocationCoordinates = {
+    ...coordsData,
     toJSON() {
-      return { ...this, toJSON: undefined };
+      return { ...coordsData };
     },
   };
   return {
     coords,
     timestamp: sdk.timestamp,
     toJSON() {
-      return { coords: coords.toJSON(), timestamp: sdk.timestamp };
+      return { coords: { ...coordsData }, timestamp: sdk.timestamp };
     },
   };
 }
 
 function toPositionError(code: 1 | 2 | 3, message: string): GeolocationPositionError {
-  // jsdom does not expose GeolocationPositionError as a constructor; fabricate
-  // an object that matches the spec shape so handlers can inspect `.code`.
-  const err = {
+  // Prefer the real constructor when available (every real browser ships it).
+  // The spec says GeolocationPositionError is not constructable, so we fall
+  // through to a fabricated object that matches the prototype via
+  // `setPrototypeOf` — that keeps `instanceof` checks in consumer code working.
+  const Ctor = (globalThis as { GeolocationPositionError?: unknown }).GeolocationPositionError;
+  const shape = {
     code,
     message,
     PERMISSION_DENIED: 1 as const,
     POSITION_UNAVAILABLE: 2 as const,
     TIMEOUT: 3 as const,
   };
-  return err as GeolocationPositionError;
+  if (typeof Ctor === 'function') {
+    const proto = (Ctor as { prototype?: object }).prototype;
+    if (proto) {
+      Object.setPrototypeOf(shape, proto);
+    }
+  }
+  return shape as GeolocationPositionError;
 }
 
 function accuracyFromOptions(options: PositionOptions | undefined): number {
@@ -87,9 +106,13 @@ function accuracyFromOptions(options: PositionOptions | undefined): number {
 function createGeolocationShim(fallback: Geolocation | undefined): Geolocation {
   // Numeric watch id → SDK unsubscribe fn. Keeps the shim's API in line with
   // the standard even though the SDK issues unsubscribe closures instead.
+  // `pendingWatches` closes the race where `clearWatch` is called before the
+  // async `watchPosition` installer resolves — without it we'd leak the SDK
+  // subscription.
   let nextWatchId = 1;
   const sdkWatches = new Map<number, () => void>();
   const nativeWatches = new Map<number, number>();
+  const pendingWatches = new Map<number, { cancelled: boolean }>();
 
   const shim: Geolocation = {
     getCurrentPosition(success, error, options) {
@@ -123,22 +146,24 @@ function createGeolocationShim(fallback: Geolocation | undefined): Geolocation {
           );
           return;
         }
-        if (options === undefined) {
-          fallback.getCurrentPosition(success, error ?? undefined);
-        } else {
-          fallback.getCurrentPosition(success, error ?? undefined, options);
-        }
+        fallback.getCurrentPosition(success, error, options);
       })();
     },
 
     watchPosition(success, error, options) {
       const id = nextWatchId++;
+      const pending = { cancelled: false };
+      pendingWatches.set(id, pending);
 
       void (async () => {
         if (await isTossEnvironment()) {
           const sdk = await loadTossSdk();
           const fn = (sdk as { startUpdateLocation?: unknown } | null)?.startUpdateLocation;
           if (typeof fn === 'function') {
+            if (pending.cancelled) {
+              pendingWatches.delete(id);
+              return;
+            }
             const unsubscribe = (
               fn as (p: {
                 onEvent: (loc: SdkLocation) => void;
@@ -158,16 +183,24 @@ function createGeolocationShim(fallback: Geolocation | undefined): Geolocation {
                 ),
               options: {
                 accuracy: accuracyFromOptions(options),
-                // Sensible defaults — the Web `watchPosition` has no analogues.
+                // Sensible defaults — web `watchPosition` has no analogues.
+                // Consumers needing sub-second updates should use the SDK directly.
                 timeInterval: 1000,
                 distanceInterval: 0,
               },
             });
+            if (pending.cancelled) {
+              unsubscribe();
+              pendingWatches.delete(id);
+              return;
+            }
             sdkWatches.set(id, unsubscribe);
+            pendingWatches.delete(id);
             return;
           }
         }
         if (!fallback) {
+          pendingWatches.delete(id);
           error?.(
             toPositionError(
               2,
@@ -176,17 +209,30 @@ function createGeolocationShim(fallback: Geolocation | undefined): Geolocation {
           );
           return;
         }
-        const nativeId =
-          options === undefined
-            ? fallback.watchPosition(success, error ?? undefined)
-            : fallback.watchPosition(success, error ?? undefined, options);
+        if (pending.cancelled) {
+          pendingWatches.delete(id);
+          return;
+        }
+        const nativeId = fallback.watchPosition(success, error, options);
+        if (pending.cancelled) {
+          fallback.clearWatch(nativeId);
+          pendingWatches.delete(id);
+          return;
+        }
         nativeWatches.set(id, nativeId);
+        pendingWatches.delete(id);
       })();
 
       return id;
     },
 
     clearWatch(id) {
+      const pending = pendingWatches.get(id);
+      if (pending) {
+        pending.cancelled = true;
+        pendingWatches.delete(id);
+        return;
+      }
       const unsubscribe = sdkWatches.get(id);
       if (unsubscribe) {
         unsubscribe();
@@ -233,10 +279,18 @@ export function uninstallGeolocationShim(): void {
   if (!(BACKUP_KEY in host)) return;
 
   const original = host[BACKUP_KEY];
-  Object.defineProperty(navigator, 'geolocation', {
-    value: original,
-    configurable: true,
-    writable: true,
-  });
+  // Delete our instance-level override so the prototype getter (on real
+  // browsers) shows through again. `defineProperty` with value would leave
+  // a permanent instance shadow.
+  delete (navigator as unknown as { geolocation?: Geolocation }).geolocation;
+  if (original !== undefined && navigator.geolocation !== original) {
+    // In jsdom or test shims where the original lived on the instance, put it
+    // back explicitly — the delete above would otherwise leave nothing behind.
+    Object.defineProperty(navigator, 'geolocation', {
+      value: original,
+      configurable: true,
+      writable: true,
+    });
+  }
   delete host[BACKUP_KEY];
 }

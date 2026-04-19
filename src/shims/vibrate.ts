@@ -23,9 +23,11 @@
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
 
 const BACKUP_KEY = Symbol.for('@ait-co/polyfill/vibrate.original');
+const HAD_KEY = Symbol.for('@ait-co/polyfill/vibrate.hadOriginal');
 
 interface BackupHost {
   [BACKUP_KEY]?: ((pattern: VibratePattern) => boolean) | undefined;
+  [HAD_KEY]?: boolean;
 }
 
 const SHORT_VIBRATION_MS = 40;
@@ -60,10 +62,16 @@ function durationToHaptic(duration: number): HapticType {
 
 function vibrateShim(pattern: VibratePattern): boolean {
   // Matches the spec: `vibrate(0)` or `vibrate([])` cancels pending vibration.
-  // We can't cancel an in-flight SDK haptic, but neither firing a new one is
-  // the closest analogue.
+  // We can't cancel an in-flight SDK haptic (no cancel API), but we still
+  // forward the cancel to the browser fallback so native vibration stops.
   const arr = Array.isArray(pattern) ? pattern : [pattern];
   if (arr.length === 0 || arr.every((n) => n === 0)) {
+    void (async () => {
+      if (!(await isTossEnvironment())) {
+        const host = navigator as unknown as BackupHost;
+        host[BACKUP_KEY]?.call(navigator, pattern);
+      }
+    })();
     return true;
   }
 
@@ -73,7 +81,9 @@ function vibrateShim(pattern: VibratePattern): boolean {
         await haptic(durationToHaptic(pattern));
         return;
       }
-      // Even indices = "on" durations, odd indices = pauses.
+      // Even indices = "on" durations, odd indices = pauses. `pattern[i]` is
+      // `number | undefined` under `noUncheckedIndexedAccess`; the `undefined`
+      // case only arises on out-of-bounds, which our length bound prevents.
       for (let i = 0; i < pattern.length; i += 2) {
         const on = pattern[i];
         if (on === undefined) break;
@@ -105,8 +115,9 @@ export function installVibrateShim(): () => void {
     return () => uninstallVibrateShim();
   }
 
-  const original = (navigator as Navigator & { vibrate?: (p: VibratePattern) => boolean }).vibrate;
-  host[BACKUP_KEY] = original;
+  const nav = navigator as Navigator & { vibrate?: (p: VibratePattern) => boolean };
+  host[BACKUP_KEY] = nav.vibrate;
+  host[HAD_KEY] = 'vibrate' in nav;
 
   Object.defineProperty(navigator, 'vibrate', {
     value: vibrateShim,
@@ -123,10 +134,16 @@ export function uninstallVibrateShim(): void {
   if (!(BACKUP_KEY in host)) return;
 
   const original = host[BACKUP_KEY];
-  Object.defineProperty(navigator, 'vibrate', {
-    value: original,
-    configurable: true,
-    writable: true,
-  });
+  const had = host[HAD_KEY];
+  if (had) {
+    Object.defineProperty(navigator, 'vibrate', {
+      value: original,
+      configurable: true,
+      writable: true,
+    });
+  } else {
+    delete (navigator as unknown as { vibrate?: (p: VibratePattern) => boolean }).vibrate;
+  }
   delete host[BACKUP_KEY];
+  delete host[HAD_KEY];
 }

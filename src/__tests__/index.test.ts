@@ -30,6 +30,26 @@ describe('@ait-co/polyfill — index', () => {
     const off2 = install();
     off1();
     off2();
-    // Should not throw.
+  });
+
+  it('install() replaces every shim target on navigator', () => {
+    install();
+    expect(typeof navigator.clipboard.writeText).toBe('function');
+    expect(typeof navigator.geolocation.getCurrentPosition).toBe('function');
+    expect(
+      typeof (navigator as Navigator & { share?: (d?: ShareData) => Promise<void> }).share,
+    ).toBe('function');
+    expect(
+      typeof (navigator as Navigator & { vibrate?: (p: VibratePattern) => boolean }).vibrate,
+    ).toBe('function');
+    expect(Object.getOwnPropertyDescriptor(navigator, 'onLine')).toBeDefined();
+    expect(Object.getOwnPropertyDescriptor(navigator, 'connection')).toBeDefined();
+  });
+
+  it('uninstall() removes instance-level overrides', () => {
+    install();
+    uninstall();
+    expect(Object.getOwnPropertyDescriptor(navigator, 'onLine')).toBeUndefined();
+    expect(Object.getOwnPropertyDescriptor(navigator, 'connection')).toBeUndefined();
   });
 });

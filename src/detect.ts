@@ -21,6 +21,22 @@ export function resetDetection(): void {
 }
 
 /**
+ * Synchronous read of the cached detection result. Returns:
+ *   - `true` / `false` if an override is active or the async detection has
+ *     already resolved
+ *   - `undefined` if detection hasn't run yet
+ *
+ * Used by spec-sync APIs (e.g. `navigator.canShare`) that can't `await`
+ * detection.
+ */
+export function isTossEnvironmentCached(): boolean | undefined {
+  const force = globalThis.__AIT_POLYFILL_FORCE__;
+  if (force === 'toss') return true;
+  if (force === 'browser') return false;
+  return cached;
+}
+
+/**
  * Returns `true` iff we detect we are running in an environment where the
  * Apps in Toss SDK (`@apps-in-toss/web-framework`) is present and usable.
  *

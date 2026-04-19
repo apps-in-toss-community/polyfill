@@ -31,6 +31,10 @@
 
 shim 설치는 **idempotent**. 재호출해도 첫 호출 이후엔 no-op. 각 shim은 원본 `navigator.clipboard`/etc.를 `Symbol`-keyed 백업에 보관 → `uninstall()`이 복원 (테스트·고급 consumer용). uninstall은 **전역 단위** — 여러 번 호출해도 어느 한 번만 효과가 있고 나머지는 no-op.
 
+Top-level `install()` 도 같은 의미로 idempotent — 반복 호출은 새 일을 하지 않지만 반환되는 uninstall 클로저는 여전히 전체 teardown을 수행한다.
+
+**Prototype 프로퍼티(`navigator.onLine`, `connection`, `geolocation` 등) 처리**: 실제 브라우저에서 이 프로퍼티들은 `Navigator.prototype`에 non-configurable getter로 정의돼 있어 **prototype을 건드리면 TypeError**. 우리는 항상 instance level에 `configurable: true` descriptor를 얹어 prototype을 가리기만 하고, uninstall 때 `delete navigator.xxx`로 instance override만 제거해서 prototype getter가 다시 드러나도록 한다. Prototype은 절대 mutate하지 않는다.
+
 ### 환경 감지 (`src/detect.ts`)
 
 단일 `isTossEnvironment()` 함수:
@@ -123,11 +127,10 @@ pnpm format         # biome format --write .
 
 ### 로드맵
 
-1. scaffold + clipboard shim — `0.1.0` (현재)
-2. geolocation + network status — `0.1.1`
-3. share + vibrate — `0.1.2`
-4. sdk-example 통합 — 브라우저(+ devtools)와 실제 토스 환경 양쪽에서 `navigator.clipboard.writeText()` 경로 동작 확인
-5. `1.0.0` — agent-plugin ship과 coordinated. Dave의 명시적 지시 시점.
+1. `0.1.0` — scaffold + clipboard shim
+2. `0.1.1` — 남은 Tier 1 (geolocation + share + vibrate + network) 한 번에 드롭 (현재 PR)
+3. `0.1.2+` — `sdk-example` 통합에서 드러나는 fix · API mapping 조정
+4. `1.0.0` — agent-plugin ship과 coordinated. Dave의 명시적 지시 시점.
 
 ## TypeScript 타입
 
