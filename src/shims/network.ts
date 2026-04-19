@@ -9,24 +9,29 @@
  *   - `'WWAN'/'UNKNOWN'`    → `onLine = true`, `effectiveType = '4g'` (best guess)
  *
  * Outside Apps in Toss → both `navigator.onLine` and `navigator.connection`
- * read through to the native value. Install installs own-instance getters
- * that consult the Toss-seeded cache first; when the cache is empty (which
- * it always is in browser mode), the getter temporarily removes its own
- * shadow, reads the prototype value, and reinstates the shadow.
+ * read through to the native value. Install captures the native values
+ * up-front and the getter returns them when the Toss-seeded cache is empty.
  *
- * Uninstall `delete`s the instance-level override so the prototype descriptor
- * (where `onLine` and `connection` actually live in real browsers) becomes
- * visible again. We never mutate the prototype — doing so would throw in
- * browsers where the descriptor is non-configurable.
+ * Install path (via `installNavigatorProperty`):
+ *   1. If the instance-level descriptor is missing or configurable, install
+ *      there as an own accessor. Uninstall deletes the own override so the
+ *      prototype re-surfaces.
+ *   2. If the instance slot is non-configurable, fall through to the
+ *      prototype. The helper tries `Object.defineProperty(Navigator.prototype,
+ *      …)`. This mutates a shared global — every `navigator` in the realm
+ *      sees the shim — which is an intentional trade-off for cases where
+ *      Chromium makes the instance non-configurable but the prototype is
+ *      still writable.
+ *   3. If the prototype descriptor is ALSO non-configurable, the
+ *      `defineProperty` throws. `installNetworkShim` catches and logs a
+ *      one-time `console.warn`; the native values stay in place.
  *
  * Browser-compat caveat (Chromium): `navigator.onLine` and `navigator.connection`
  * are value slots, not methods, so the method-level install trick we use for
- * `geolocation`/`share`/`vibrate` does not apply here. When Chromium marks the
- * instance descriptor as non-configurable AND the prototype descriptor is also
- * non-configurable, we cannot install. In that case the shim logs a one-time
- * `console.warn` and leaves the native values in place — consumers keep the
- * browser's own `onLine`/`connection` values; the SDK-synced state is simply
- * disabled for that session.
+ * `geolocation`/`share`/`vibrate` does not apply here. When both the instance
+ * and prototype descriptors are non-configurable we land in case (3) —
+ * consumers keep the browser's own `onLine`/`connection` values and the
+ * SDK-synced state is simply disabled for that session.
  *
  * Caveat: the Web NetworkInformation API is evented (`change` fires on
  * transitions). The SDK exposes only a one-shot query, so listeners attached

@@ -17,6 +17,12 @@
  * Caveat: the SDK's share has no counterpart for `files` (Web Share Level 2).
  * `canShare({ files })` returns `false` whenever the sync-accessible detection
  * says Toss is active (or is being forced via the test override).
+ *
+ * Caveat: uninstall-during-in-flight. An async `share()` call that was
+ * initiated before `uninstall()` but hasn't yet resolved may read
+ * `host[SHARE_BACKUP_KEY]` after uninstall cleared it, and throw
+ * `NotSupportedError` even though the call would have been valid pre-uninstall.
+ * Consumers should await any outstanding share before calling uninstall.
  */
 
 import { isTossEnvironment, isTossEnvironmentCached, loadTossSdk } from '../detect.js';
@@ -157,8 +163,8 @@ export function installShareShim(): () => void {
   };
 
   const snapshot = installObjectMethods(navigator, {
-    share: shareShim as (...args: never[]) => unknown,
-    canShare: canShareShim as (...args: never[]) => unknown,
+    share: shareShim,
+    canShare: canShareShim,
   });
 
   if (!snapshot) {

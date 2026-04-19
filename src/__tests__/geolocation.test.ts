@@ -94,6 +94,58 @@ describe('installGeolocationShim — browser mode', () => {
     // The method identity DID change (shim wraps the call).
     expect(navigator.geolocation.getCurrentPosition).not.toBe(native.getCurrentPosition);
   });
+
+  it('handles a realistic prototype-shaped Geolocation: methods live on prototype, install shadows them, uninstall removes the shadow', async () => {
+    // Mimic a real browser where `navigator.geolocation`'s methods are
+    // inherited from `Geolocation.prototype`, not own properties of the
+    // instance.
+    const gc = vi.fn((success: PositionCallback) => {
+      success({
+        coords: {
+          latitude: 9,
+          longitude: 8,
+          altitude: null,
+          accuracy: 5,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null,
+          toJSON: () => ({}),
+        },
+        timestamp: 42,
+        toJSON: () => ({}),
+      });
+    });
+    const wp = vi.fn(() => 3);
+    const cw = vi.fn();
+    const proto = { getCurrentPosition: gc, watchPosition: wp, clearWatch: cw };
+    const fake = Object.create(proto) as Geolocation;
+
+    Object.defineProperty(navigator, 'geolocation', {
+      value: fake,
+      configurable: true,
+      writable: true,
+    });
+
+    // Sanity: methods are inherited, not own.
+    expect(Object.hasOwn(fake, 'getCurrentPosition')).toBe(false);
+
+    installGeolocationShim();
+    // The shim should have created own shadows on the instance.
+    expect(Object.hasOwn(fake, 'getCurrentPosition')).toBe(true);
+    expect(Object.hasOwn(fake, 'watchPosition')).toBe(true);
+    expect(Object.hasOwn(fake, 'clearWatch')).toBe(true);
+
+    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject);
+    });
+    expect(position.coords.latitude).toBe(9);
+    expect(gc).toHaveBeenCalledTimes(1);
+
+    uninstallGeolocationShim();
+    // Own shadows must be deleted so the prototype methods surface again.
+    expect(Object.hasOwn(fake, 'getCurrentPosition')).toBe(false);
+    expect(navigator.geolocation.getCurrentPosition).toBe(gc);
+  });
 });
 
 describe('installGeolocationShim — Toss mode', () => {

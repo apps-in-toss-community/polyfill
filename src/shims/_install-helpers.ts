@@ -114,6 +114,15 @@ export interface MethodInstallSnapshot {
 }
 
 /**
+ * Replacement function accepted by `installObjectMethods`. We widen the
+ * signature with `any[]` so call sites can pass heterogeneous method shapes
+ * (e.g. `getCurrentPosition(success, error, options)` alongside
+ * `clearWatch(id)`) without per-call casts.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: heterogeneous method signatures per target
+export type MethodReplacement = (...args: any[]) => unknown;
+
+/**
  * Mutate methods on an existing object rather than replacing the object
  * itself. This is the path we take for `navigator.geolocation`, `navigator.share`,
  * and `navigator.vibrate` in Chromium, where the slot on `navigator` is a
@@ -121,51 +130,50 @@ export interface MethodInstallSnapshot {
  * themselves (or the methods on the referenced object) are still
  * `configurable: true, writable: true`.
  *
- * Each replacement is installed via plain assignment. If any slot is not
- * writable (e.g. frozen object), install is aborted and previously-applied
- * replacements are rolled back, so the caller observes an atomic "all or
- * nothing" failure as `null`. The caller is expected to degrade gracefully
- * (e.g. log a one-time `console.warn`) when that happens.
+ * Each replacement is installed via plain assignment. If any slot refuses the
+ * write (frozen object, non-writable descriptor, Proxy trap that returns true
+ * without updating, accessor with a no-op setter), install is aborted and
+ * previously-applied replacements are rolled back, so the caller observes an
+ * atomic "all or nothing" failure as `null`. The caller is expected to degrade
+ * gracefully (e.g. log a one-time `console.warn`) when that happens.
  */
 export function installObjectMethods(
   target: object,
-  replacements: Record<string, (...args: never[]) => unknown>,
+  replacements: Record<string, MethodReplacement>,
 ): MethodInstallSnapshot | null {
   const methods: Record<string, { hadOwn: boolean; original: unknown }> = {};
   const applied: string[] = [];
   const bag = target as Record<string, unknown>;
 
+  const rollback = (): void => {
+    for (const appliedKey of applied) {
+      const prev = methods[appliedKey];
+      if (!prev) continue;
+      if (prev.hadOwn) {
+        bag[appliedKey] = prev.original;
+      } else {
+        delete bag[appliedKey];
+      }
+    }
+  };
+
   for (const key of Object.keys(replacements)) {
     const hadOwn = Object.hasOwn(target, key);
     const original = bag[key];
+    const replacement = replacements[key] as unknown;
     try {
-      bag[key] = replacements[key] as unknown;
+      bag[key] = replacement;
     } catch {
       // Non-writable / frozen. Roll back and return null.
-      for (const applieKey of applied) {
-        const prev = methods[applieKey];
-        if (!prev) continue;
-        if (prev.hadOwn) {
-          bag[applieKey] = prev.original;
-        } else {
-          delete bag[applieKey];
-        }
-      }
+      rollback();
       return null;
     }
-    // Verify the assignment actually stuck — silent-failure descriptors (e.g.
-    // `writable: false` without strict mode) can skip the throw and leave the
-    // original value in place. Treat that the same as a throw.
-    if (bag[key] !== (replacements[key] as unknown)) {
-      for (const applieKey of applied) {
-        const prev = methods[applieKey];
-        if (!prev) continue;
-        if (prev.hadOwn) {
-          bag[applieKey] = prev.original;
-        } else {
-          delete bag[applieKey];
-        }
-      }
+    // Verify the assignment actually stuck. ESM modules are always strict, so
+    // a naked non-writable slot would have thrown above — but Proxy `set`
+    // traps and accessor descriptors with no-op setters can silently drop the
+    // write without throwing. Treat that the same as a throw.
+    if (bag[key] !== replacement) {
+      rollback();
       return null;
     }
     methods[key] = { hadOwn, original };

@@ -321,9 +321,9 @@ export function installGeolocationShim(): () => void {
   const shim = createGeolocationShim(fallback);
 
   const snapshot = installObjectMethods(target, {
-    getCurrentPosition: shim.getCurrentPosition as (...args: never[]) => unknown,
-    watchPosition: shim.watchPosition as (...args: never[]) => unknown,
-    clearWatch: shim.clearWatch as (...args: never[]) => unknown,
+    getCurrentPosition: shim.getCurrentPosition,
+    watchPosition: shim.watchPosition,
+    clearWatch: shim.clearWatch,
   });
 
   if (!snapshot) {

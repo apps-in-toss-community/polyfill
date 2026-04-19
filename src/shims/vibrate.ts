@@ -133,7 +133,7 @@ export function installVibrateShim(): () => void {
   host[BACKUP_KEY] = nav.vibrate ? nav.vibrate.bind(navigator) : undefined;
 
   const snapshot = installObjectMethods(navigator, {
-    vibrate: vibrateShim as (...args: never[]) => unknown,
+    vibrate: vibrateShim,
   });
 
   if (!snapshot) {
