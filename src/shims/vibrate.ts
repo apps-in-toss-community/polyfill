@@ -21,13 +21,18 @@
  */
 
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
+import {
+  type InstallSnapshot,
+  installNavigatorProperty,
+  restoreNavigatorProperty,
+} from './_install-helpers.js';
 
 const BACKUP_KEY = Symbol.for('@ait-co/polyfill/vibrate.original');
-const HAD_KEY = Symbol.for('@ait-co/polyfill/vibrate.hadOriginal');
+const SNAPSHOT_KEY = Symbol.for('@ait-co/polyfill/vibrate.snapshot');
 
 interface BackupHost {
   [BACKUP_KEY]?: ((pattern: VibratePattern) => boolean) | undefined;
-  [HAD_KEY]?: boolean;
+  [SNAPSHOT_KEY]?: InstallSnapshot | undefined;
 }
 
 const SHORT_VIBRATION_MS = 40;
@@ -116,10 +121,9 @@ export function installVibrateShim(): () => void {
   }
 
   const nav = navigator as Navigator & { vibrate?: (p: VibratePattern) => boolean };
-  host[BACKUP_KEY] = nav.vibrate;
-  host[HAD_KEY] = 'vibrate' in nav;
+  host[BACKUP_KEY] = nav.vibrate?.bind(navigator);
 
-  Object.defineProperty(navigator, 'vibrate', {
+  host[SNAPSHOT_KEY] = installNavigatorProperty('vibrate', {
     value: vibrateShim,
     configurable: true,
     writable: true,
@@ -133,20 +137,8 @@ export function uninstallVibrateShim(): void {
   const host = navigator as unknown as BackupHost;
   if (!(BACKUP_KEY in host)) return;
 
-  const original = host[BACKUP_KEY];
-  const had = host[HAD_KEY];
-  // Prototype-safe restore: delete the instance override first, then only
-  // redefine on the instance if the original was an own property the
-  // prototype doesn't provide — prevents permanent shadowing of a prototype
-  // `vibrate` getter on real browsers.
-  delete (navigator as unknown as { vibrate?: (p: VibratePattern) => boolean }).vibrate;
-  if (had && navigator.vibrate !== original) {
-    Object.defineProperty(navigator, 'vibrate', {
-      value: original,
-      configurable: true,
-      writable: true,
-    });
-  }
+  const snapshot = host[SNAPSHOT_KEY];
+  if (snapshot) restoreNavigatorProperty('vibrate', snapshot);
   delete host[BACKUP_KEY];
-  delete host[HAD_KEY];
+  delete host[SNAPSHOT_KEY];
 }

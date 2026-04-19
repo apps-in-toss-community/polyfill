@@ -14,8 +14,15 @@
  */
 
 import { isTossEnvironment, isTossEnvironmentCached, loadTossSdk } from '../detect.js';
+import {
+  type InstallSnapshot,
+  installNavigatorProperty,
+  restoreNavigatorProperty,
+} from './_install-helpers.js';
 
 const SHARE_BACKUP_KEY = Symbol.for('@ait-co/polyfill/share.original');
+const SHARE_SNAPSHOT_KEY = Symbol.for('@ait-co/polyfill/share.snapshot');
+const CAN_SHARE_SNAPSHOT_KEY = Symbol.for('@ait-co/polyfill/canShare.snapshot');
 
 type ShareFn = (data?: ShareData) => Promise<void>;
 type CanShareFn = (data?: ShareData) => boolean;
@@ -29,6 +36,8 @@ interface Backup {
 
 interface BackupHost {
   [SHARE_BACKUP_KEY]?: Backup | undefined;
+  [SHARE_SNAPSHOT_KEY]?: InstallSnapshot | undefined;
+  [CAN_SHARE_SNAPSHOT_KEY]?: InstallSnapshot | undefined;
 }
 
 function buildSdkMessage(data: ShareData | undefined): string {
@@ -145,12 +154,12 @@ export function installShareShim(): () => void {
     hadCanShare: 'canShare' in nav,
   };
 
-  Object.defineProperty(navigator, 'share', {
+  host[SHARE_SNAPSHOT_KEY] = installNavigatorProperty('share', {
     value: shareShim,
     configurable: true,
     writable: true,
   });
-  Object.defineProperty(navigator, 'canShare', {
+  host[CAN_SHARE_SNAPSHOT_KEY] = installNavigatorProperty('canShare', {
     value: canShareShim,
     configurable: true,
     writable: true,
@@ -164,29 +173,12 @@ export function uninstallShareShim(): void {
   const host = navigator as unknown as BackupHost;
   if (!(SHARE_BACKUP_KEY in host)) return;
 
-  const backup = host[SHARE_BACKUP_KEY];
-
-  // Prototype-safe restore: delete the instance override first so a prototype
-  // descriptor (real browsers put `share` / `canShare` on `Navigator.prototype`
-  // when they exist at all) shows through. Only redefine on the instance if
-  // the original was an own property that the prototype doesn't provide —
-  // otherwise we'd permanently shadow the prototype getter.
-  delete (navigator as unknown as { share?: ShareFn }).share;
-  if (backup?.hadShare && navigator.share !== backup.share) {
-    Object.defineProperty(navigator, 'share', {
-      value: backup.share,
-      configurable: true,
-      writable: true,
-    });
-  }
-  delete (navigator as unknown as { canShare?: CanShareFn }).canShare;
-  if (backup?.hadCanShare && navigator.canShare !== backup.canShare) {
-    Object.defineProperty(navigator, 'canShare', {
-      value: backup.canShare,
-      configurable: true,
-      writable: true,
-    });
-  }
+  const shareSnap = host[SHARE_SNAPSHOT_KEY];
+  if (shareSnap) restoreNavigatorProperty('share', shareSnap);
+  const canShareSnap = host[CAN_SHARE_SNAPSHOT_KEY];
+  if (canShareSnap) restoreNavigatorProperty('canShare', canShareSnap);
 
   delete host[SHARE_BACKUP_KEY];
+  delete host[SHARE_SNAPSHOT_KEY];
+  delete host[CAN_SHARE_SNAPSHOT_KEY];
 }
