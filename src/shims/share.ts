@@ -166,26 +166,26 @@ export function uninstallShareShim(): void {
 
   const backup = host[SHARE_BACKUP_KEY];
 
-  // Restore the original property shape: if the browser originally had no
-  // `share` / `canShare`, `delete` so feature-detection (`'share' in navigator`)
-  // returns the true pre-install answer. Otherwise write the original back.
-  if (backup?.hadShare) {
+  // Prototype-safe restore: delete the instance override first so a prototype
+  // descriptor (real browsers put `share` / `canShare` on `Navigator.prototype`
+  // when they exist at all) shows through. Only redefine on the instance if
+  // the original was an own property that the prototype doesn't provide —
+  // otherwise we'd permanently shadow the prototype getter.
+  delete (navigator as unknown as { share?: ShareFn }).share;
+  if (backup?.hadShare && navigator.share !== backup.share) {
     Object.defineProperty(navigator, 'share', {
       value: backup.share,
       configurable: true,
       writable: true,
     });
-  } else {
-    delete (navigator as unknown as { share?: ShareFn }).share;
   }
-  if (backup?.hadCanShare) {
+  delete (navigator as unknown as { canShare?: CanShareFn }).canShare;
+  if (backup?.hadCanShare && navigator.canShare !== backup.canShare) {
     Object.defineProperty(navigator, 'canShare', {
       value: backup.canShare,
       configurable: true,
       writable: true,
     });
-  } else {
-    delete (navigator as unknown as { canShare?: CanShareFn }).canShare;
   }
 
   delete host[SHARE_BACKUP_KEY];

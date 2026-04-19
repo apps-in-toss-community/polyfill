@@ -135,14 +135,17 @@ export function uninstallVibrateShim(): void {
 
   const original = host[BACKUP_KEY];
   const had = host[HAD_KEY];
-  if (had) {
+  // Prototype-safe restore: delete the instance override first, then only
+  // redefine on the instance if the original was an own property the
+  // prototype doesn't provide — prevents permanent shadowing of a prototype
+  // `vibrate` getter on real browsers.
+  delete (navigator as unknown as { vibrate?: (p: VibratePattern) => boolean }).vibrate;
+  if (had && navigator.vibrate !== original) {
     Object.defineProperty(navigator, 'vibrate', {
       value: original,
       configurable: true,
       writable: true,
     });
-  } else {
-    delete (navigator as unknown as { vibrate?: (p: VibratePattern) => boolean }).vibrate;
   }
   delete host[BACKUP_KEY];
   delete host[HAD_KEY];

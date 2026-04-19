@@ -171,4 +171,32 @@ describe('installShareShim — neither Toss nor browser share', () => {
     expect('share' in navigator).toBe(false);
     expect('canShare' in navigator).toBe(false);
   });
+
+  it('uninstall exposes a prototype-level share/canShare instead of leaving an own shadow', () => {
+    const proto = Object.getPrototypeOf(navigator) as object;
+    const origShareDesc = Object.getOwnPropertyDescriptor(proto, 'share');
+    const origCanShareDesc = Object.getOwnPropertyDescriptor(proto, 'canShare');
+    const fakeShare = async () => {};
+    const fakeCanShare = () => true;
+    Object.defineProperty(proto, 'share', { configurable: true, get: () => fakeShare });
+    Object.defineProperty(proto, 'canShare', { configurable: true, get: () => fakeCanShare });
+
+    try {
+      installShareShim();
+      uninstallShareShim();
+      expect((navigator as Navigator & { share?: unknown; canShare?: unknown }).share).toBe(
+        fakeShare,
+      );
+      expect((navigator as Navigator & { share?: unknown; canShare?: unknown }).canShare).toBe(
+        fakeCanShare,
+      );
+      expect(Object.getOwnPropertyDescriptor(navigator, 'share')).toBeUndefined();
+      expect(Object.getOwnPropertyDescriptor(navigator, 'canShare')).toBeUndefined();
+    } finally {
+      if (origShareDesc) Object.defineProperty(proto, 'share', origShareDesc);
+      else delete (proto as { share?: unknown }).share;
+      if (origCanShareDesc) Object.defineProperty(proto, 'canShare', origCanShareDesc);
+      else delete (proto as { canShare?: unknown }).canShare;
+    }
+  });
 });

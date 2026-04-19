@@ -166,4 +166,21 @@ describe('installVibrateShim — uninstall restoration', () => {
     uninstallVibrateShim();
     expect('vibrate' in navigator).toBe(false);
   });
+
+  it('uninstall exposes a prototype-level vibrate instead of leaving an own shadow', () => {
+    const proto = Object.getPrototypeOf(navigator) as object;
+    const origDesc = Object.getOwnPropertyDescriptor(proto, 'vibrate');
+    const fake = () => true;
+    Object.defineProperty(proto, 'vibrate', { configurable: true, get: () => fake });
+
+    try {
+      installVibrateShim();
+      uninstallVibrateShim();
+      expect((navigator as Navigator & { vibrate?: unknown }).vibrate).toBe(fake);
+      expect(Object.getOwnPropertyDescriptor(navigator, 'vibrate')).toBeUndefined();
+    } finally {
+      if (origDesc) Object.defineProperty(proto, 'vibrate', origDesc);
+      else delete (proto as { vibrate?: unknown }).vibrate;
+    }
+  });
 });
