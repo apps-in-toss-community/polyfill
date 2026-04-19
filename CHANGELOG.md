@@ -1,5 +1,34 @@
 # @ait-co/polyfill
 
+## 0.1.3
+
+### Patch Changes
+
+- Install shims at the prototype level when the instance property refuses to be
+  redefined. Chromium now exposes `navigator.clipboard` / `.geolocation` /
+  `.vibrate` / `.onLine` / `.connection` as **non-configurable own** properties
+  on the `navigator` instance, so the previous
+  `Object.defineProperty(navigator, …, { configurable: true })` call threw
+  `TypeError: Cannot redefine property` and the install aborted mid-way.
+
+  New strategy:
+
+  1. Try instance-level install.
+  2. If the browser refuses, install on `Navigator.prototype` instead and
+     (best-effort) remove the instance shadow so the prototype accessor shows
+     through on reads via `navigator.*`.
+
+  A single install now completes all five shims in a real Chromium — the
+  Toss-only gating introduced in 0.1.2 made this the only remaining blocker.
+
+  Internal: adds `src/shims/_install-helpers.ts` and routes every shim's
+  install/uninstall through it.
+
+  Network shim also stops using the "delete-then-reinstall" shadow trick for
+  fall-through reads — it captures the native `onLine` / `connection` values
+  at install time and reads the cached references instead, which is
+  compatible with prototype-level installs.
+
 ## 0.1.2
 
 ### Patch Changes

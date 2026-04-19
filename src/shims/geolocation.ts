@@ -28,11 +28,18 @@
  */
 
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
+import {
+  type InstallSnapshot,
+  installNavigatorProperty,
+  restoreNavigatorProperty,
+} from './_install-helpers.js';
 
 const BACKUP_KEY = Symbol.for('@ait-co/polyfill/geolocation.original');
+const SNAPSHOT_KEY = Symbol.for('@ait-co/polyfill/geolocation.snapshot');
 
 interface BackupHost {
   [BACKUP_KEY]?: Geolocation | undefined;
+  [SNAPSHOT_KEY]?: InstallSnapshot | undefined;
 }
 
 // SDK Accuracy enum values. We don't import the enum at runtime (peer is
@@ -274,7 +281,7 @@ export function installGeolocationShim(): () => void {
   host[BACKUP_KEY] = original;
 
   const shim = createGeolocationShim(original);
-  Object.defineProperty(navigator, 'geolocation', {
+  host[SNAPSHOT_KEY] = installNavigatorProperty('geolocation', {
     value: shim,
     configurable: true,
     writable: true,
@@ -288,19 +295,8 @@ export function uninstallGeolocationShim(): void {
   const host = navigator as unknown as BackupHost;
   if (!(BACKUP_KEY in host)) return;
 
-  const original = host[BACKUP_KEY];
-  // Delete our instance-level override so the prototype getter (on real
-  // browsers) shows through again. `defineProperty` with value would leave
-  // a permanent instance shadow.
-  delete (navigator as unknown as { geolocation?: Geolocation }).geolocation;
-  if (original !== undefined && navigator.geolocation !== original) {
-    // In jsdom or test shims where the original lived on the instance, put it
-    // back explicitly — the delete above would otherwise leave nothing behind.
-    Object.defineProperty(navigator, 'geolocation', {
-      value: original,
-      configurable: true,
-      writable: true,
-    });
-  }
+  const snapshot = host[SNAPSHOT_KEY];
+  if (snapshot) restoreNavigatorProperty('geolocation', snapshot);
   delete host[BACKUP_KEY];
+  delete host[SNAPSHOT_KEY];
 }

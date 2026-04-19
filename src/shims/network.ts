@@ -41,11 +41,20 @@
  */
 
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
+import {
+  type InstallSnapshot,
+  installNavigatorProperty,
+  restoreNavigatorProperty,
+} from './_install-helpers.js';
 
 const INSTALLED_KEY = Symbol.for('@ait-co/polyfill/network.installed');
+const ON_LINE_SNAPSHOT_KEY = Symbol.for('@ait-co/polyfill/network.onLine.snapshot');
+const CONNECTION_SNAPSHOT_KEY = Symbol.for('@ait-co/polyfill/network.connection.snapshot');
 
 interface BackupHost {
   [INSTALLED_KEY]?: boolean;
+  [ON_LINE_SNAPSHOT_KEY]?: InstallSnapshot | undefined;
+  [CONNECTION_SNAPSHOT_KEY]?: InstallSnapshot | undefined;
 }
 
 type SdkNetworkStatus = 'OFFLINE' | 'WIFI' | '2G' | '3G' | '4G' | '5G' | 'WWAN' | 'UNKNOWN';
@@ -183,47 +192,31 @@ export function installNetworkShim(): () => void {
     return inflight;
   }
 
+  // Capture the native values **before** we install so the getters can fall
+  // through without needing to temporarily remove their own shadow (which is
+  // incompatible with prototype-level installs — Chromium keeps
+  // `navigator.onLine` / `connection` non-configurable on the instance, so we
+  // may end up installing on Navigator.prototype instead).
+  const nativeOnLine = (navigator as Navigator & { onLine?: boolean }).onLine;
+  const nativeConnection = (navigator as Navigator & { connection?: unknown }).connection;
+
   // Seed the cache on install so the first sync read is meaningful.
   void refresh();
 
-  Object.defineProperty(navigator, 'onLine', {
+  host[ON_LINE_SNAPSHOT_KEY] = installNavigatorProperty('onLine', {
     configurable: true,
     get() {
       void refresh();
-      if (cachedStatus !== null) {
-        return statusToOnline(cachedStatus);
-      }
-      // Fall back to whatever the prototype would have returned. Temporarily
-      // delete our shadow to read through; the try/finally guarantees the
-      // shadow is restored even if the prototype getter throws.
-      const desc = Object.getOwnPropertyDescriptor(navigator, 'onLine');
-      delete (navigator as unknown as { onLine?: boolean }).onLine;
-      try {
-        return navigator.onLine;
-      } finally {
-        if (desc) Object.defineProperty(navigator, 'onLine', desc);
-      }
+      if (cachedStatus !== null) return statusToOnline(cachedStatus);
+      return nativeOnLine ?? true;
     },
   });
 
-  Object.defineProperty(navigator, 'connection', {
+  host[CONNECTION_SNAPSHOT_KEY] = installNavigatorProperty('connection', {
     configurable: true,
     get() {
       void refresh();
-      // Symmetric with `onLine`: when the SDK hasn't seeded us (either a
-      // browser-mode install or pre-seed Toss), read through to the native
-      // `navigator.connection` so consumers in plain browsers don't see a
-      // hardcoded `effectiveType: '4g'` default.
-      if (cachedStatus === null) {
-        const desc = Object.getOwnPropertyDescriptor(navigator, 'connection');
-        delete (navigator as unknown as { connection?: unknown }).connection;
-        try {
-          const native = (navigator as Navigator & { connection?: unknown }).connection;
-          if (native !== undefined) return native;
-        } finally {
-          if (desc) Object.defineProperty(navigator, 'connection', desc);
-        }
-      }
+      if (cachedStatus === null && nativeConnection !== undefined) return nativeConnection;
       return connection;
     },
   });
@@ -236,11 +229,12 @@ export function uninstallNetworkShim(): void {
   const host = navigator as unknown as BackupHost;
   if (!host[INSTALLED_KEY]) return;
 
-  // `delete` the instance-level property so the prototype descriptor (where
-  // `onLine` and `connection` actually live in real browsers) is exposed
-  // again. Redefining the prototype would throw on non-configurable getters.
-  delete (navigator as unknown as { onLine?: boolean }).onLine;
-  delete (navigator as unknown as { connection?: unknown }).connection;
+  const onLineSnap = host[ON_LINE_SNAPSHOT_KEY];
+  if (onLineSnap) restoreNavigatorProperty('onLine', onLineSnap);
+  const connSnap = host[CONNECTION_SNAPSHOT_KEY];
+  if (connSnap) restoreNavigatorProperty('connection', connSnap);
 
   delete host[INSTALLED_KEY];
+  delete host[ON_LINE_SNAPSHOT_KEY];
+  delete host[CONNECTION_SNAPSHOT_KEY];
 }
