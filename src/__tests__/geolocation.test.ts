@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetDetection } from '../detect.js';
 import { installGeolocationShim, uninstallGeolocationShim } from '../shims/geolocation.js';
 
+/**
+ * Attach a fake native `navigator.geolocation`. Returns the mock spies as
+ * stable references so tests can still observe calls after the shim mutates
+ * the methods on the underlying object (method-level install replaces the
+ * spy on the object, but the returned references remain the originals).
+ */
 function attachFakeNativeGeolocation() {
   const getCurrentPosition = vi.fn((success: PositionCallback) => {
     success({
@@ -27,10 +33,11 @@ function attachFakeNativeGeolocation() {
     configurable: true,
     writable: true,
   });
-  return fake as Geolocation & {
-    getCurrentPosition: typeof getCurrentPosition;
-    watchPosition: typeof watchPosition;
-    clearWatch: typeof clearWatch;
+  return {
+    object: fake,
+    getCurrentPosition,
+    watchPosition,
+    clearWatch,
   };
 }
 
@@ -73,30 +80,19 @@ describe('installGeolocationShim — browser mode', () => {
     const native = attachFakeNativeGeolocation();
     installGeolocationShim();
     uninstallGeolocationShim();
-    expect(navigator.geolocation).toBe(native);
+    expect(navigator.geolocation).toBe(native.object);
+    expect(navigator.geolocation.getCurrentPosition).toBe(native.getCurrentPosition);
   });
 
-  it('uninstall exposes a prototype-level geolocation instead of leaving an own shadow', () => {
-    // Simulate a real-browser shape: geolocation lives on the prototype.
-    const proto = Object.getPrototypeOf(navigator) as object;
-    const origDesc = Object.getOwnPropertyDescriptor(proto, 'geolocation');
-    // Remove any own override first.
-    delete (navigator as unknown as { geolocation?: Geolocation }).geolocation;
-    const fake = { getCurrentPosition: () => {} } as unknown as Geolocation;
-    Object.defineProperty(proto, 'geolocation', { configurable: true, get: () => fake });
+  it('preserves navigator.geolocation identity after install (method-level swap, not replacement)', () => {
+    const native = attachFakeNativeGeolocation();
+    installGeolocationShim();
 
-    try {
-      installGeolocationShim();
-      uninstallGeolocationShim();
-      expect(navigator.geolocation).toBe(fake);
-      expect(Object.getOwnPropertyDescriptor(navigator, 'geolocation')).toBeUndefined();
-    } finally {
-      if (origDesc) {
-        Object.defineProperty(proto, 'geolocation', origDesc);
-      } else {
-        delete (proto as { geolocation?: unknown }).geolocation;
-      }
-    }
+    // The object identity must not change — Chromium marks `navigator.geolocation`
+    // as a non-configurable own property, so replacing the slot is not an option.
+    expect(navigator.geolocation).toBe(native.object);
+    // The method identity DID change (shim wraps the call).
+    expect(navigator.geolocation.getCurrentPosition).not.toBe(native.getCurrentPosition);
   });
 });
 

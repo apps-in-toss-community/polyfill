@@ -19,6 +19,15 @@
  * visible again. We never mutate the prototype — doing so would throw in
  * browsers where the descriptor is non-configurable.
  *
+ * Browser-compat caveat (Chromium): `navigator.onLine` and `navigator.connection`
+ * are value slots, not methods, so the method-level install trick we use for
+ * `geolocation`/`share`/`vibrate` does not apply here. When Chromium marks the
+ * instance descriptor as non-configurable AND the prototype descriptor is also
+ * non-configurable, we cannot install. In that case the shim logs a one-time
+ * `console.warn` and leaves the native values in place — consumers keep the
+ * browser's own `onLine`/`connection` values; the SDK-synced state is simply
+ * disabled for that session.
+ *
  * Caveat: the Web NetworkInformation API is evented (`change` fires on
  * transitions). The SDK exposes only a one-shot query, so listeners attached
  * to `navigator.connection` are accepted but never fire from a `change` event
@@ -203,23 +212,46 @@ export function installNetworkShim(): () => void {
   // Seed the cache on install so the first sync read is meaningful.
   void refresh();
 
-  host[ON_LINE_SNAPSHOT_KEY] = installNavigatorProperty('onLine', {
-    configurable: true,
-    get() {
-      void refresh();
-      if (cachedStatus !== null) return statusToOnline(cachedStatus);
-      return nativeOnLine ?? true;
-    },
-  });
+  // Guard both descriptor installs with try/catch. These properties are value
+  // slots that the plan calls out as not having a method-level equivalent;
+  // when Chromium makes them non-configurable at both the instance and the
+  // prototype, `installNavigatorProperty` may throw. In that case we warn once
+  // and proceed — consumers keep the browser's native values.
+  let installWarned = false;
+  const warnNonConfigurable = (e: unknown): void => {
+    if (installWarned) return;
+    installWarned = true;
+    console.warn(
+      '[@ait-co/polyfill] navigator.onLine/connection is non-configurable in this browser; Toss network status sync disabled.',
+      e,
+    );
+  };
 
-  host[CONNECTION_SNAPSHOT_KEY] = installNavigatorProperty('connection', {
-    configurable: true,
-    get() {
-      void refresh();
-      if (cachedStatus === null && nativeConnection !== undefined) return nativeConnection;
-      return connection;
-    },
-  });
+  try {
+    host[ON_LINE_SNAPSHOT_KEY] = installNavigatorProperty('onLine', {
+      configurable: true,
+      get() {
+        void refresh();
+        if (cachedStatus !== null) return statusToOnline(cachedStatus);
+        return nativeOnLine ?? true;
+      },
+    });
+  } catch (e) {
+    warnNonConfigurable(e);
+  }
+
+  try {
+    host[CONNECTION_SNAPSHOT_KEY] = installNavigatorProperty('connection', {
+      configurable: true,
+      get() {
+        void refresh();
+        if (cachedStatus === null && nativeConnection !== undefined) return nativeConnection;
+        return connection;
+      },
+    });
+  } catch (e) {
+    warnNonConfigurable(e);
+  }
 
   return uninstallNetworkShim;
 }

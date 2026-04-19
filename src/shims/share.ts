@@ -8,6 +8,12 @@
  * Outside Apps in Toss → defers to the browser's native `navigator.share`, or
  * throws `NotSupportedError` if unavailable.
  *
+ * Install strategy: **method-level** on `navigator`. Assigning
+ * `navigator.share = fn` creates an own property that shadows the prototype
+ * method. Uninstall deletes the own shadow so the prototype method surfaces
+ * again. We do not mutate `Navigator.prototype` — in real browsers its
+ * descriptor may be non-configurable, which would throw on reassignment.
+ *
  * Caveat: the SDK's share has no counterpart for `files` (Web Share Level 2).
  * `canShare({ files })` returns `false` whenever the sync-accessible detection
  * says Toss is active (or is being forced via the test override).
@@ -15,29 +21,25 @@
 
 import { isTossEnvironment, isTossEnvironmentCached, loadTossSdk } from '../detect.js';
 import {
-  type InstallSnapshot,
-  installNavigatorProperty,
-  restoreNavigatorProperty,
+  installObjectMethods,
+  type MethodInstallSnapshot,
+  restoreObjectMethods,
 } from './_install-helpers.js';
 
 const SHARE_BACKUP_KEY = Symbol.for('@ait-co/polyfill/share.original');
 const SHARE_SNAPSHOT_KEY = Symbol.for('@ait-co/polyfill/share.snapshot');
-const CAN_SHARE_SNAPSHOT_KEY = Symbol.for('@ait-co/polyfill/canShare.snapshot');
 
 type ShareFn = (data?: ShareData) => Promise<void>;
 type CanShareFn = (data?: ShareData) => boolean;
 
 interface Backup {
-  share?: ShareFn | undefined;
-  canShare?: CanShareFn | undefined;
-  hadShare: boolean;
-  hadCanShare: boolean;
+  share: ShareFn | undefined;
+  canShare: CanShareFn | undefined;
 }
 
 interface BackupHost {
   [SHARE_BACKUP_KEY]?: Backup | undefined;
-  [SHARE_SNAPSHOT_KEY]?: InstallSnapshot | undefined;
-  [CAN_SHARE_SNAPSHOT_KEY]?: InstallSnapshot | undefined;
+  [SHARE_SNAPSHOT_KEY]?: MethodInstallSnapshot | undefined;
 }
 
 function buildSdkMessage(data: ShareData | undefined): string {
@@ -86,7 +88,7 @@ async function shareShim(data?: ShareData): Promise<void> {
       'NotSupportedError',
     );
   }
-  return original.call(navigator, data);
+  return original(data);
 }
 
 function canShareShim(data?: ShareData): boolean {
@@ -121,7 +123,7 @@ function canShareShim(data?: ShareData): boolean {
   const backup = host[SHARE_BACKUP_KEY];
   const originalCanShare = backup?.canShare;
   if (originalCanShare) {
-    return originalCanShare.call(navigator, data);
+    return originalCanShare(data);
   }
   return Boolean(
     (data?.title != null && data.title !== '') ||
@@ -147,24 +149,25 @@ export function installShareShim(): () => void {
     share?: ShareFn;
     canShare?: CanShareFn;
   };
+  // Capture the native methods BEFORE patching, bound to `navigator` so that
+  // fallback calls keep the correct `this` and never recurse through our shim.
   host[SHARE_BACKUP_KEY] = {
-    share: nav.share,
-    canShare: nav.canShare,
-    hadShare: 'share' in nav,
-    hadCanShare: 'canShare' in nav,
+    share: nav.share ? nav.share.bind(navigator) : undefined,
+    canShare: nav.canShare ? nav.canShare.bind(navigator) : undefined,
   };
 
-  host[SHARE_SNAPSHOT_KEY] = installNavigatorProperty('share', {
-    value: shareShim,
-    configurable: true,
-    writable: true,
-  });
-  host[CAN_SHARE_SNAPSHOT_KEY] = installNavigatorProperty('canShare', {
-    value: canShareShim,
-    configurable: true,
-    writable: true,
+  const snapshot = installObjectMethods(navigator, {
+    share: shareShim as (...args: never[]) => unknown,
+    canShare: canShareShim as (...args: never[]) => unknown,
   });
 
+  if (!snapshot) {
+    // Slots frozen. Back out the backup bookkeeping so a later install can retry.
+    delete host[SHARE_BACKUP_KEY];
+    return () => uninstallShareShim();
+  }
+
+  host[SHARE_SNAPSHOT_KEY] = snapshot;
   return uninstallShareShim;
 }
 
@@ -173,12 +176,9 @@ export function uninstallShareShim(): void {
   const host = navigator as unknown as BackupHost;
   if (!(SHARE_BACKUP_KEY in host)) return;
 
-  const shareSnap = host[SHARE_SNAPSHOT_KEY];
-  if (shareSnap) restoreNavigatorProperty('share', shareSnap);
-  const canShareSnap = host[CAN_SHARE_SNAPSHOT_KEY];
-  if (canShareSnap) restoreNavigatorProperty('canShare', canShareSnap);
+  const snapshot = host[SHARE_SNAPSHOT_KEY];
+  if (snapshot) restoreObjectMethods(snapshot);
 
   delete host[SHARE_BACKUP_KEY];
   delete host[SHARE_SNAPSHOT_KEY];
-  delete host[CAN_SHARE_SNAPSHOT_KEY];
 }

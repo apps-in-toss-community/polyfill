@@ -34,9 +34,27 @@ describe('@ait-co/polyfill — index', () => {
     });
 
     it('install() replaces every shim target on navigator', async () => {
+      // Method-level geolocation install mutates methods on the existing
+      // `navigator.geolocation` object. Real browsers always expose one; jsdom
+      // does not, so seed a minimal placeholder for this test.
+      const originalGetCurrentPosition = () => {};
+      const placeholder = {
+        getCurrentPosition: originalGetCurrentPosition,
+        watchPosition: () => 0,
+        clearWatch: () => {},
+      } as unknown as Geolocation;
+      Object.defineProperty(navigator, 'geolocation', {
+        value: placeholder,
+        configurable: true,
+        writable: true,
+      });
+
       await install();
       expect(typeof navigator.clipboard.writeText).toBe('function');
       expect(typeof navigator.geolocation.getCurrentPosition).toBe('function');
+      // Method-level install mutates the placeholder in place; the shim's
+      // wrapper must not be the original placeholder method.
+      expect(navigator.geolocation.getCurrentPosition).not.toBe(originalGetCurrentPosition);
       expect(
         typeof (navigator as Navigator & { share?: (d?: ShareData) => Promise<void> }).share,
       ).toBe('function');

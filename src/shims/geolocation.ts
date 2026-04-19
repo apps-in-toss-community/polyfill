@@ -8,6 +8,13 @@
  * Outside Apps in Toss → defers to the browser's native `navigator.geolocation`.
  * If neither is available, the error callback receives a `GeolocationPositionError`.
  *
+ * Install strategy: **method-level**. We do **not** replace `navigator.geolocation`
+ * itself — Chromium marks that slot as a non-configurable own property, which
+ * both `defineProperty(navigator, 'geolocation', …)` and the prototype-level
+ * fallback cannot override (the instance shadow blocks prototype reads). We
+ * instead mutate the methods on the existing `Geolocation` object, whose own
+ * method descriptors are configurable+writable in every browser we've seen.
+ *
  * SDK/Web shape mismatch handled here:
  *   - SDK `Accuracy` is a numeric enum (1 = Lowest … 6 = BestForNavigation); the
  *     standard `PositionOptions.enableHighAccuracy` is a boolean. We map
@@ -29,17 +36,17 @@
 
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
 import {
-  type InstallSnapshot,
-  installNavigatorProperty,
-  restoreNavigatorProperty,
+  installObjectMethods,
+  type MethodInstallSnapshot,
+  restoreObjectMethods,
 } from './_install-helpers.js';
 
 const BACKUP_KEY = Symbol.for('@ait-co/polyfill/geolocation.original');
 const SNAPSHOT_KEY = Symbol.for('@ait-co/polyfill/geolocation.snapshot');
 
 interface BackupHost {
-  [BACKUP_KEY]?: Geolocation | undefined;
-  [SNAPSHOT_KEY]?: InstallSnapshot | undefined;
+  [BACKUP_KEY]?: { target: Geolocation } | undefined;
+  [SNAPSHOT_KEY]?: MethodInstallSnapshot | undefined;
 }
 
 // SDK Accuracy enum values. We don't import the enum at runtime (peer is
@@ -120,7 +127,25 @@ function accuracyFromOptions(options: PositionOptions | undefined): number {
   return options?.enableHighAccuracy ? ACCURACY_HIGH : ACCURACY_BALANCED;
 }
 
-function createGeolocationShim(fallback: Geolocation | undefined): Geolocation {
+/**
+ * Minimal view of the native `Geolocation` methods we forward to. We pass
+ * the **captured originals** here, not a reference to `navigator.geolocation`
+ * itself — after install the methods on that object ARE the shim, so using
+ * `navigator.geolocation.getCurrentPosition(…)` as a fallback would infinite-loop.
+ */
+interface GeolocationFallback {
+  getCurrentPosition: Geolocation['getCurrentPosition'] | undefined;
+  watchPosition: Geolocation['watchPosition'] | undefined;
+  clearWatch: Geolocation['clearWatch'] | undefined;
+}
+
+interface GeolocationShim {
+  getCurrentPosition: Geolocation['getCurrentPosition'];
+  watchPosition: Geolocation['watchPosition'];
+  clearWatch: Geolocation['clearWatch'];
+}
+
+function createGeolocationShim(fallback: GeolocationFallback): GeolocationShim {
   // Numeric watch id → SDK unsubscribe fn. Keeps the shim's API in line with
   // the standard even though the SDK issues unsubscribe closures instead.
   // `pendingWatches` closes the race where `clearWatch` is called before the
@@ -131,7 +156,7 @@ function createGeolocationShim(fallback: Geolocation | undefined): Geolocation {
   const nativeWatches = new Map<number, number>();
   const pendingWatches = new Map<number, { cancelled: boolean }>();
 
-  const shim: Geolocation = {
+  const shim: GeolocationShim = {
     getCurrentPosition(success, error, options) {
       void (async () => {
         if (await isTossEnvironment()) {
@@ -154,7 +179,7 @@ function createGeolocationShim(fallback: Geolocation | undefined): Geolocation {
             return;
           }
         }
-        if (!fallback) {
+        if (!fallback.getCurrentPosition) {
           error?.(
             toPositionError(
               2,
@@ -216,7 +241,7 @@ function createGeolocationShim(fallback: Geolocation | undefined): Geolocation {
             return;
           }
         }
-        if (!fallback) {
+        if (!fallback.watchPosition) {
           pendingWatches.delete(id);
           error?.(
             toPositionError(
@@ -232,7 +257,7 @@ function createGeolocationShim(fallback: Geolocation | undefined): Geolocation {
         }
         const nativeId = fallback.watchPosition(success, error, options);
         if (pending.cancelled) {
-          fallback.clearWatch(nativeId);
+          fallback.clearWatch?.(nativeId);
           pendingWatches.delete(id);
           return;
         }
@@ -257,7 +282,7 @@ function createGeolocationShim(fallback: Geolocation | undefined): Geolocation {
         return;
       }
       const nativeId = nativeWatches.get(id);
-      if (nativeId !== undefined && fallback) {
+      if (nativeId !== undefined && fallback.clearWatch) {
         fallback.clearWatch(nativeId);
         nativeWatches.delete(id);
       }
@@ -277,15 +302,38 @@ export function installGeolocationShim(): () => void {
     return () => uninstallGeolocationShim();
   }
 
-  const original = navigator.geolocation as Geolocation | undefined;
-  host[BACKUP_KEY] = original;
+  const target = navigator.geolocation as Geolocation | undefined;
+  if (!target) {
+    // No `navigator.geolocation` at all (rare — jsdom may expose it, real
+    // browsers always do). Nothing for the shim to mutate; bail quietly.
+    host[BACKUP_KEY] = undefined;
+    return () => uninstallGeolocationShim();
+  }
 
-  const shim = createGeolocationShim(original);
-  host[SNAPSHOT_KEY] = installNavigatorProperty('geolocation', {
-    value: shim,
-    configurable: true,
-    writable: true,
+  // Capture the native methods BEFORE we patch so the shim's fallback path
+  // doesn't recurse through itself.
+  const fallback: GeolocationFallback = {
+    getCurrentPosition: target.getCurrentPosition?.bind(target),
+    watchPosition: target.watchPosition?.bind(target),
+    clearWatch: target.clearWatch?.bind(target),
+  };
+
+  const shim = createGeolocationShim(fallback);
+
+  const snapshot = installObjectMethods(target, {
+    getCurrentPosition: shim.getCurrentPosition as (...args: never[]) => unknown,
+    watchPosition: shim.watchPosition as (...args: never[]) => unknown,
+    clearWatch: shim.clearWatch as (...args: never[]) => unknown,
   });
+
+  if (!snapshot) {
+    // Method slots frozen — can't install. No-op uninstall.
+    host[BACKUP_KEY] = undefined;
+    return () => uninstallGeolocationShim();
+  }
+
+  host[BACKUP_KEY] = { target };
+  host[SNAPSHOT_KEY] = snapshot;
 
   return uninstallGeolocationShim;
 }
@@ -296,7 +344,7 @@ export function uninstallGeolocationShim(): void {
   if (!(BACKUP_KEY in host)) return;
 
   const snapshot = host[SNAPSHOT_KEY];
-  if (snapshot) restoreNavigatorProperty('geolocation', snapshot);
+  if (snapshot) restoreObjectMethods(snapshot);
   delete host[BACKUP_KEY];
   delete host[SNAPSHOT_KEY];
 }
