@@ -10,6 +10,11 @@
  * or returns `false` when unavailable (matches the spec — browsers that don't
  * support vibration simply return `false`).
  *
+ * Install strategy: **method-level** on `navigator`. We assign our wrapper to
+ * `navigator.vibrate` (creating an own shadow over the prototype method) and
+ * delete it on uninstall so the prototype re-surfaces. We do not mutate
+ * `Navigator.prototype` itself — browsers may mark it non-configurable.
+ *
  * Caveats (documented in CLAUDE.md as the known lossy trade-off):
  *   - SDK haptics are qualitative ("tickWeak", "basicMedium"), not millisecond
  *     durations. The shim approximates intensity from duration but cannot
@@ -22,17 +27,19 @@
 
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
 import {
-  type InstallSnapshot,
-  installNavigatorProperty,
-  restoreNavigatorProperty,
+  installObjectMethods,
+  type MethodInstallSnapshot,
+  restoreObjectMethods,
 } from './_install-helpers.js';
 
 const BACKUP_KEY = Symbol.for('@ait-co/polyfill/vibrate.original');
 const SNAPSHOT_KEY = Symbol.for('@ait-co/polyfill/vibrate.snapshot');
 
+type VibrateFn = (pattern: VibratePattern) => boolean;
+
 interface BackupHost {
-  [BACKUP_KEY]?: ((pattern: VibratePattern) => boolean) | undefined;
-  [SNAPSHOT_KEY]?: InstallSnapshot | undefined;
+  [BACKUP_KEY]?: VibrateFn | undefined;
+  [SNAPSHOT_KEY]?: MethodInstallSnapshot | undefined;
 }
 
 const SHORT_VIBRATION_MS = 40;
@@ -74,7 +81,7 @@ function vibrateShim(pattern: VibratePattern): boolean {
     void (async () => {
       if (!(await isTossEnvironment())) {
         const host = navigator as unknown as BackupHost;
-        host[BACKUP_KEY]?.call(navigator, pattern);
+        host[BACKUP_KEY]?.(pattern);
       }
     })();
     return true;
@@ -104,7 +111,7 @@ function vibrateShim(pattern: VibratePattern): boolean {
     }
     const host = navigator as unknown as BackupHost;
     const original = host[BACKUP_KEY];
-    original?.call(navigator, pattern);
+    original?.(pattern);
   })();
 
   return true;
@@ -120,15 +127,21 @@ export function installVibrateShim(): () => void {
     return () => uninstallVibrateShim();
   }
 
-  const nav = navigator as Navigator & { vibrate?: (p: VibratePattern) => boolean };
-  host[BACKUP_KEY] = nav.vibrate?.bind(navigator);
+  const nav = navigator as Navigator & { vibrate?: VibrateFn };
+  // Capture the native method BEFORE we patch, bound to `navigator` so our
+  // fallback call keeps the correct `this` and never recurses into our shim.
+  host[BACKUP_KEY] = nav.vibrate ? nav.vibrate.bind(navigator) : undefined;
 
-  host[SNAPSHOT_KEY] = installNavigatorProperty('vibrate', {
-    value: vibrateShim,
-    configurable: true,
-    writable: true,
+  const snapshot = installObjectMethods(navigator, {
+    vibrate: vibrateShim as (...args: never[]) => unknown,
   });
 
+  if (!snapshot) {
+    delete host[BACKUP_KEY];
+    return () => uninstallVibrateShim();
+  }
+
+  host[SNAPSHOT_KEY] = snapshot;
   return uninstallVibrateShim;
 }
 
@@ -138,7 +151,7 @@ export function uninstallVibrateShim(): void {
   if (!(BACKUP_KEY in host)) return;
 
   const snapshot = host[SNAPSHOT_KEY];
-  if (snapshot) restoreNavigatorProperty('vibrate', snapshot);
+  if (snapshot) restoreObjectMethods(snapshot);
   delete host[BACKUP_KEY];
   delete host[SNAPSHOT_KEY];
 }

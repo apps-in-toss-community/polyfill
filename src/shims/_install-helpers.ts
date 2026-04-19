@@ -92,7 +92,6 @@ export function restoreNavigatorProperty(prop: string, snapshot: InstallSnapshot
     }
   } else {
     try {
-      // biome-ignore lint/performance/noDelete: property deletion is the uninstall intent
       delete (target as Record<PropertyKey, unknown>)[prop];
     } catch {
       /* non-configurable — rare. */
@@ -102,4 +101,98 @@ export function restoreNavigatorProperty(prop: string, snapshot: InstallSnapshot
   // If our install pushed past an instance shadow, we leave the instance alone
   // — the descriptor we captured for `instanceHadOwn: true` lives on the
   // instance and was not modified at install time.
+}
+
+/**
+ * Method-level install snapshot. Captured per-key so `restoreObjectMethods`
+ * can distinguish "was an own property, reassign it" from "was inherited,
+ * delete the override so the prototype method surfaces again".
+ */
+export interface MethodInstallSnapshot {
+  target: object;
+  methods: Record<string, { hadOwn: boolean; original: unknown }>;
+}
+
+/**
+ * Mutate methods on an existing object rather than replacing the object
+ * itself. This is the path we take for `navigator.geolocation`, `navigator.share`,
+ * and `navigator.vibrate` in Chromium, where the slot on `navigator` is a
+ * non-configurable own property that we cannot replace — but the methods
+ * themselves (or the methods on the referenced object) are still
+ * `configurable: true, writable: true`.
+ *
+ * Each replacement is installed via plain assignment. If any slot is not
+ * writable (e.g. frozen object), install is aborted and previously-applied
+ * replacements are rolled back, so the caller observes an atomic "all or
+ * nothing" failure as `null`. The caller is expected to degrade gracefully
+ * (e.g. log a one-time `console.warn`) when that happens.
+ */
+export function installObjectMethods(
+  target: object,
+  replacements: Record<string, (...args: never[]) => unknown>,
+): MethodInstallSnapshot | null {
+  const methods: Record<string, { hadOwn: boolean; original: unknown }> = {};
+  const applied: string[] = [];
+  const bag = target as Record<string, unknown>;
+
+  for (const key of Object.keys(replacements)) {
+    const hadOwn = Object.hasOwn(target, key);
+    const original = bag[key];
+    try {
+      bag[key] = replacements[key] as unknown;
+    } catch {
+      // Non-writable / frozen. Roll back and return null.
+      for (const applieKey of applied) {
+        const prev = methods[applieKey];
+        if (!prev) continue;
+        if (prev.hadOwn) {
+          bag[applieKey] = prev.original;
+        } else {
+          delete bag[applieKey];
+        }
+      }
+      return null;
+    }
+    // Verify the assignment actually stuck — silent-failure descriptors (e.g.
+    // `writable: false` without strict mode) can skip the throw and leave the
+    // original value in place. Treat that the same as a throw.
+    if (bag[key] !== (replacements[key] as unknown)) {
+      for (const applieKey of applied) {
+        const prev = methods[applieKey];
+        if (!prev) continue;
+        if (prev.hadOwn) {
+          bag[applieKey] = prev.original;
+        } else {
+          delete bag[applieKey];
+        }
+      }
+      return null;
+    }
+    methods[key] = { hadOwn, original };
+    applied.push(key);
+  }
+
+  return { target, methods };
+}
+
+/**
+ * Reverse an `installObjectMethods` snapshot. Reassigns originals for slots
+ * that were own properties before install; deletes the override for slots
+ * that were inherited (so the prototype method surfaces again).
+ */
+export function restoreObjectMethods(snapshot: MethodInstallSnapshot): void {
+  const bag = snapshot.target as Record<string, unknown>;
+  for (const key of Object.keys(snapshot.methods)) {
+    const entry = snapshot.methods[key];
+    if (!entry) continue;
+    try {
+      if (entry.hadOwn) {
+        bag[key] = entry.original;
+      } else {
+        delete bag[key];
+      }
+    } catch {
+      /* frozen between install and restore — rare. */
+    }
+  }
 }
