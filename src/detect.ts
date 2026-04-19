@@ -1,14 +1,19 @@
 /**
  * Environment detection: are we running inside Apps in Toss, or a plain browser?
  *
- * Strategy: feature-sniff `@apps-in-toss/web-framework`. The SDK is declared as
- * an **optional** peer dependency. If it resolves and exposes a known export,
- * we assume we can route calls through it; otherwise we fall back to the
- * browser's native implementation in each shim.
+ * Strategy: call the SDK's `getAppsInTossGlobals()` — a synchronous export
+ * that returns the runtime's Toss globals (deploymentId, brand name, …)
+ * inside the Apps in Toss runtime and throws (RN bridge unavailable)
+ * anywhere else. The SDK itself is an **optional** peer dependency; if its
+ * module can't be imported we are definitely not inside Toss.
  *
- * We deliberately avoid UA sniffing (spoofable) and avoid calling any SDK
- * function during detection (could prompt permission dialogs, fire analytics,
- * etc.).
+ * Just having the SDK module resolvable is not enough — apps can bundle it
+ * and still run in a plain browser. We need the bridge probe to confirm.
+ *
+ * UA sniffing (spoofable) is avoided. We do call `getAppsInTossGlobals`, but
+ * that's a constant read from the bridge — no permission dialogs, no
+ * analytics fire. In a plain browser the bridge lookup fails fast (sync
+ * throw, microsecond-scale), so the startup cost is negligible.
  */
 
 let cached: boolean | undefined;
@@ -53,8 +58,19 @@ export async function isTossEnvironment(): Promise<boolean> {
   if (cached !== undefined) return cached;
 
   const mod = await loadTossSdk();
-  // Presence of a well-known export is our smoke test.
-  cached = typeof mod?.getClipboardText === 'function';
+  if (typeof mod?.getAppsInTossGlobals !== 'function') {
+    cached = false;
+    return cached;
+  }
+  // Inside Toss the bridge returns a populated globals object. In a plain
+  // browser the RN bridge isn't attached and the call throws — that's our
+  // signal. Any non-throwing call with an object return is treated as Toss.
+  try {
+    const globals = mod.getAppsInTossGlobals();
+    cached = Boolean(globals) && typeof globals === 'object';
+  } catch {
+    cached = false;
+  }
   return cached;
 }
 

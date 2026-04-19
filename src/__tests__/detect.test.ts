@@ -25,28 +25,28 @@ describe('detect / isTossEnvironment', () => {
 
   it('caches the detected value across calls (but not override values)', async () => {
     // Without an override, the first real detection is cached.
-    expect(await isTossEnvironment()).toBe(true); // devDep is resolvable
+    expect(await isTossEnvironment()).toBe(false); // RN bridge absent in test env
     resetDetection();
-    expect(await isTossEnvironment()).toBe(true);
+    expect(await isTossEnvironment()).toBe(false);
   });
 
   it('override wins over a previously cached detection, mid-session', async () => {
-    // Prime the cache via real resolution.
-    expect(await isTossEnvironment()).toBe(true);
-
-    // Flip the override — takes effect immediately, no reset needed.
-    globalThis.__AIT_POLYFILL_FORCE__ = 'browser';
+    // Prime the cache via real resolution (false — no RN bridge in tests).
     expect(await isTossEnvironment()).toBe(false);
 
+    // Flip the override — takes effect immediately, no reset needed.
     globalThis.__AIT_POLYFILL_FORCE__ = 'toss';
     expect(await isTossEnvironment()).toBe(true);
+
+    globalThis.__AIT_POLYFILL_FORCE__ = 'browser';
+    expect(await isTossEnvironment()).toBe(false);
   });
 
-  it('returns true when the SDK is resolvable and exports getClipboardText', async () => {
-    // The devDep-installed @apps-in-toss/web-framework fulfils this in CI.
-    // We intentionally don't mock here — it's the real resolution path.
+  it('returns false in a plain test environment (SDK resolves, RN bridge does not)', async () => {
+    // The SDK is installed as a devDep, so `import()` succeeds. But the SDK's
+    // bridge calls depend on `window.ReactNativeWebView` which does not exist
+    // in jsdom, so `getAppsInTossGlobals()` throws — detection is `false`.
     const result = await isTossEnvironment();
-    // It should be true in this repo because the peer is installed as devDep.
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 });

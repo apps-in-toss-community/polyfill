@@ -1,12 +1,11 @@
 # @ait-co/polyfill
 
-> 🚧 **Pre-release (0.1.x)** — implemented, pending `sdk-example` integration verification.
 > Part of the unofficial `apps-in-toss-community` project. Not affiliated with Toss.
 > 비공식 커뮤니티 프로젝트입니다. 토스와 제휴하지 않았습니다.
 
 Web standard API polyfill for Apps in Toss mini-apps. Write your mini-app with **standard Web APIs** (`navigator.clipboard`, `navigator.geolocation`, …) and have it transparently work inside Apps in Toss.
 
-앱인토스 미니앱에서 **웹 표준 API를 그대로 사용**해서 개발할 수 있게 해주는 polyfill. 런타임에 앱인토스 환경을 감지해 내부적으로 `@apps-in-toss/web-framework` 호출로 라우팅하고, 그 외 환경(일반 브라우저, 로컬 개발, 테스트)에서는 브라우저의 원본 구현을 그대로 사용합니다 — no-op shim이 아닙니다.
+앱인토스 미니앱에서 **웹 표준 API를 그대로 사용**해서 개발할 수 있게 해주는 polyfill. 런타임에 앱인토스 환경으로 확인된 경우에만 SDK로 라우팅하는 shim을 설치하고, 그 외 환경(일반 브라우저, 로컬 개발, 테스트)에서는 **아무것도 하지 않아** 브라우저의 원본 구현이 그대로 동작합니다.
 
 ## Install
 
@@ -14,7 +13,7 @@ Web standard API polyfill for Apps in Toss mini-apps. Write your mini-app with *
 pnpm add @ait-co/polyfill
 ```
 
-`@apps-in-toss/web-framework` is an **optional peer dependency**. Apps that only target a pure-web context don't need to install it — the shim falls through to the native browser path.
+`@apps-in-toss/web-framework` is an **optional peer dependency**. Apps that only target a pure-web context don't need to install it — polyfill stays inert and the browser natives remain in charge.
 
 ```sh
 pnpm add @apps-in-toss/web-framework   # only if you also ship a Toss build
@@ -22,57 +21,65 @@ pnpm add @apps-in-toss/web-framework   # only if you also ship a Toss build
 
 ## Usage
 
-### Install every shim (recommended)
+### Just add the dep (recommended)
 
-Call `install()` once at app entry:
+Import the side-effect entry once at app start. Detection + install happens automatically; in a plain browser it's a no-op.
 
 ```ts
-import { install } from '@ait-co/polyfill';
+import '@ait-co/polyfill/auto';
 
-install();
-
+// Anywhere later:
 await navigator.clipboard.writeText('hello');
 ```
 
-`install()` is idempotent — calling it again is a no-op. It returns an uninstall function; a top-level `uninstall()` is also exported for convenience.
+### Explicit install
+
+If you need to know **when** the polyfill attached (to gate init) or to tear it down, call `install()` yourself:
 
 ```ts
 import { install, uninstall } from '@ait-co/polyfill';
 
-const restore = install();
+const restore = await install(); // resolves when detection completes
+
 // ...
+
 restore(); // or uninstall()
 ```
+
+`install()` is async — the returned promise resolves with an uninstall function. When we're not inside Apps in Toss the returned function is a no-op, because no shim was installed. Calling `install()` more than once is safe.
 
 Each shim stashes the original `navigator`/`window` value so `uninstall()` restores it cleanly — useful in tests.
 
 ### Subpath imports (bundle-size sensitive)
 
-Pick just the shims you need and install them explicitly:
+If you want to pick individual shims without the auto-install wiring:
 
 ```ts
 import { installClipboardShim } from '@ait-co/polyfill/clipboard';
-import { isTossEnvironment } from '@ait-co/polyfill/detect';
 
-installClipboardShim();
+installClipboardShim(); // installs unconditionally — gate with detect.ts if you want Toss-only
 ```
 
-The package is marked `"sideEffects": false`, so unused shims are dropped by any modern bundler when you use subpath imports.
+The package is marked `sideEffects: ["./dist/auto.js"]`, so only the `/auto` entry is kept when tree-shaking; everything else is drop-if-unused.
+
+## Environment detection
+
+Polyfill calls `getAppsInTossGlobals()` from the SDK to decide whether we're actually inside Apps in Toss. That call is synchronous and reads a bridge constant — in a plain browser the RN bridge isn't attached and the call throws synchronously (microsecond-scale), so the startup cost is negligible.
+
+You can override detection for tests via `globalThis.__AIT_POLYFILL_FORCE__ = 'toss' | 'browser'`.
 
 ## Supported APIs
 
-모든 Tier 1 shim이 단위 테스트까지 통과한 상태이고, 실환경 검증(`sdk-example` 통합)이 남아있습니다. 실환경 검증 이후 일부 API 매핑이 조정될 수 있습니다.
+Tier 1 — all shipped; paired SDK routing is live when inside Apps in Toss.
 
 | Web standard | SDK counterpart | Landed in |
 |---|---|---|
 | `navigator.clipboard.readText()` / `writeText(text)` | `getClipboardText()` / `setClipboardText(text)` | 0.1.0 |
-| `navigator.geolocation.getCurrentPosition()` | `getCurrentLocation({ accuracy })` | 0.1.1 (pending) |
-| `navigator.geolocation.watchPosition()` / `clearWatch()` | `startUpdateLocation(...)` | 0.1.1 (pending) |
-| `navigator.share({ title, text, url })` | `share({ message })` (concatenates into `message`) | 0.1.1 (pending) |
-| `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` (best-effort, lossy) | 0.1.1 (pending) |
-| `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` (poll on read; no `change` for seed) | 0.1.1 (pending) |
-
-`(pending)` 표시는 해당 행이 아직 npm으로 공개되지 않았다는 뜻입니다. 다음 Version Packages PR이 merge되어 `0.1.1`이 publish되면 이 표시는 제거됩니다.
+| `navigator.geolocation.getCurrentPosition()` | `getCurrentLocation({ accuracy })` | 0.1.1 |
+| `navigator.geolocation.watchPosition()` / `clearWatch()` | `startUpdateLocation(...)` | 0.1.1 |
+| `navigator.share({ title, text, url })` | `share({ message })` (concatenates into `message`) | 0.1.1 |
+| `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` (best-effort, lossy) | 0.1.1 |
+| `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` (poll on read; no `change` for seed) | 0.1.1 |
 
 See [`TODO.md`](./TODO.md) for the full backlog and tiering.
 

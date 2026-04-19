@@ -3,11 +3,6 @@ import { resetDetection } from '../detect.js';
 import { install, uninstall, VERSION } from '../index.js';
 
 describe('@ait-co/polyfill — index', () => {
-  beforeEach(() => {
-    resetDetection();
-    globalThis.__AIT_POLYFILL_FORCE__ = 'browser';
-  });
-
   afterEach(() => {
     uninstall();
     resetDetection();
@@ -19,37 +14,63 @@ describe('@ait-co/polyfill — index', () => {
     expect(VERSION.length).toBeGreaterThan(0);
   });
 
-  it('install() returns an uninstall function', () => {
-    const off = install();
-    expect(typeof off).toBe('function');
-    off();
+  describe('inside Apps in Toss (forced)', () => {
+    beforeEach(() => {
+      resetDetection();
+      globalThis.__AIT_POLYFILL_FORCE__ = 'toss';
+    });
+
+    it('install() resolves with an uninstall function', async () => {
+      const off = await install();
+      expect(typeof off).toBe('function');
+      off();
+    });
+
+    it('install() is idempotent', async () => {
+      const off1 = await install();
+      const off2 = await install();
+      off1();
+      off2();
+    });
+
+    it('install() replaces every shim target on navigator', async () => {
+      await install();
+      expect(typeof navigator.clipboard.writeText).toBe('function');
+      expect(typeof navigator.geolocation.getCurrentPosition).toBe('function');
+      expect(
+        typeof (navigator as Navigator & { share?: (d?: ShareData) => Promise<void> }).share,
+      ).toBe('function');
+      expect(
+        typeof (navigator as Navigator & { vibrate?: (p: VibratePattern) => boolean }).vibrate,
+      ).toBe('function');
+      expect(Object.getOwnPropertyDescriptor(navigator, 'onLine')).toBeDefined();
+      expect(Object.getOwnPropertyDescriptor(navigator, 'connection')).toBeDefined();
+    });
+
+    it('uninstall() removes instance-level overrides', async () => {
+      await install();
+      uninstall();
+      expect(Object.getOwnPropertyDescriptor(navigator, 'onLine')).toBeUndefined();
+      expect(Object.getOwnPropertyDescriptor(navigator, 'connection')).toBeUndefined();
+    });
   });
 
-  it('install() is idempotent', () => {
-    const off1 = install();
-    const off2 = install();
-    off1();
-    off2();
-  });
+  describe('outside Apps in Toss (forced browser)', () => {
+    beforeEach(() => {
+      resetDetection();
+      globalThis.__AIT_POLYFILL_FORCE__ = 'browser';
+    });
 
-  it('install() replaces every shim target on navigator', () => {
-    install();
-    expect(typeof navigator.clipboard.writeText).toBe('function');
-    expect(typeof navigator.geolocation.getCurrentPosition).toBe('function');
-    expect(
-      typeof (navigator as Navigator & { share?: (d?: ShareData) => Promise<void> }).share,
-    ).toBe('function');
-    expect(
-      typeof (navigator as Navigator & { vibrate?: (p: VibratePattern) => boolean }).vibrate,
-    ).toBe('function');
-    expect(Object.getOwnPropertyDescriptor(navigator, 'onLine')).toBeDefined();
-    expect(Object.getOwnPropertyDescriptor(navigator, 'connection')).toBeDefined();
-  });
-
-  it('uninstall() removes instance-level overrides', () => {
-    install();
-    uninstall();
-    expect(Object.getOwnPropertyDescriptor(navigator, 'onLine')).toBeUndefined();
-    expect(Object.getOwnPropertyDescriptor(navigator, 'connection')).toBeUndefined();
+    it('install() is a no-op — native navigator stays untouched', async () => {
+      const onLineBefore = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+      const connBefore = Object.getOwnPropertyDescriptor(navigator, 'connection');
+      const off = await install();
+      expect(typeof off).toBe('function');
+      // No instance-level overrides were added.
+      expect(Object.getOwnPropertyDescriptor(navigator, 'onLine')).toEqual(onLineBefore);
+      expect(Object.getOwnPropertyDescriptor(navigator, 'connection')).toEqual(connBefore);
+      // Returned "uninstall" is a no-op, safe to call.
+      expect(() => off()).not.toThrow();
+    });
   });
 });

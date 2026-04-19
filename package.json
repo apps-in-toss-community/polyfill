@@ -1,6 +1,6 @@
 {
   "name": "@ait-co/polyfill",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Polyfill so you can build Apps in Toss mini-apps with standard Web APIs (navigator.clipboard, navigator.geolocation, ...) instead of the proprietary SDK",
   "type": "module",
   "engines": {
@@ -36,12 +36,18 @@
     "./detect": {
       "types": "./dist/detect.d.ts",
       "import": "./dist/detect.js"
+    },
+    "./auto": {
+      "types": "./dist/auto.d.ts",
+      "import": "./dist/auto.js"
     }
   },
   "files": [
     "dist"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/auto.js"
+  ],
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
