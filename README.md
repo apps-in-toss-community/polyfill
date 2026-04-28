@@ -85,6 +85,26 @@ See [`TODO.md`](./TODO.md) for the full backlog and tiering.
 
 APIs without a reasonable Web standard counterpart (auth, IAP, ads, analytics, Toss-specific environment info) stay in the `@apps-in-toss/web-framework` namespace — polyfill is not the home for "everything the SDK does." Rationale in [`CLAUDE.md`](./CLAUDE.md).
 
+## Development
+
+```sh
+pnpm install
+pnpm test
+pnpm lint
+pnpm typecheck
+pnpm build
+```
+
+### Pre-commit hook
+
+Optional but recommended. After cloning, activate the standard pre-commit hook (runs `biome check` on staged files):
+
+```sh
+git config core.hooksPath .githooks
+```
+
+This is a developer convenience for fast feedback before push. CI runs the same checks as the enforcement layer, so contributors who don't activate the hook will still see lint failures in their PR.
+
 ## License
 
 BSD-3-Clause
