@@ -8,15 +8,20 @@
 
 set -e
 
-# Collect staged files matching biome's targets (TS/JS/JSON/etc.)
-staged=$(git diff --cached --name-only --diff-filter=ACMR \
-  | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc)$' || true)
+# Collect staged files matching biome's targets (TS/JS/JSON/etc.).
+# Null-delimited so paths with spaces/newlines survive; works with both
+# GNU and BSD xargs (macOS).
+staged=$(git diff --cached --name-only --diff-filter=ACMR -z \
+  | grep -z -E '\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc)$' \
+  | tr -d '\0' || true)
 
 if [ -z "$staged" ]; then
   exit 0
 fi
 
-# Run biome check on staged files. `--no-errors-on-unmatched` so files
-# excluded by biome.json `files.includes` (e.g., dist/, node_modules/)
-# don't fail the hook.
-echo "$staged" | xargs pnpm exec biome check --no-errors-on-unmatched
+# Re-stream with NULs preserved for xargs -0. `--no-errors-on-unmatched`
+# lets biome skip files excluded by biome.json `files.includes`
+# (e.g., dist/, node_modules/) without failing the hook.
+git diff --cached --name-only --diff-filter=ACMR -z \
+  | grep -z -E '\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc)$' \
+  | xargs -0 pnpm exec biome check --no-errors-on-unmatched
