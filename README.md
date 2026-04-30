@@ -81,7 +81,9 @@ Tier 1 — all shipped; paired SDK routing is live when inside Apps in Toss.
 | `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` (best-effort, lossy) | 0.1.1 |
 | `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` (poll on read; no `change` for seed) | 0.1.1 |
 
-See [`TODO.md`](./TODO.md) for the full backlog and tiering.
+See [`TODO.md`](./TODO.md) for the full backlog and tiering, and
+[`INTEGRATION.md`](./INTEGRATION.md) for an adoption guide (Vite + React
+snippet, recommended pairing with `@ait-co/devtools`, per-API one-liners).
 
 APIs without a reasonable Web standard counterpart (auth, IAP, ads, analytics, Toss-specific environment info) stay in the `@apps-in-toss/web-framework` namespace — polyfill is not the home for "everything the SDK does." Rationale in [`CLAUDE.md`](./CLAUDE.md).
 
