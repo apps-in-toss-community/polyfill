@@ -90,7 +90,7 @@ Polyfill에 올릴 후보 API를 세 tier로 나눈다. 기준은 **"표준과 S
 - **Tier 2 (evaluate after Tier 1 stabilises)** — 의미론적 gap이 있어 shim이 문제를 만들 여지가 있는 것. sync/async mismatch(`localStorage` ↔ SDK `Storage`), in-app browser 정책 차이(`window.open`), nav stack 의존(`history.back`), browser가 이미 커버하는 이벤트(`visibilitychange`). 배포 전 policy 결정 필요.
 - **Out of scope** — 표준 대응이 없는 것(아래 참고).
 
-우선순위 관리는 `TODO.md` 참고 — Tier 1 = Medium, Tier 2 = Backlog로 매핑.
+우선순위 관리는 umbrella `../TODO.md`의 `polyfill` 섹션 참고 — Tier 1 = Medium, Tier 2 = Backlog로 매핑. (조직 전체의 TODO는 umbrella가 single source of truth. 이 repo의 `TODO.md`는 stub.)
 
 ## Out-of-scope (왜)
 
