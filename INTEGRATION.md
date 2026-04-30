@@ -45,9 +45,12 @@ export default defineConfig({
     // the floating panel. Polyfill needs the alias in place before any
     // dynamic import resolves.
     aitDevtools.vite({
-      // mock: default true (development) / false (production). Override
-      // only if you want the alias active in a production preview build.
-      // panel: default true. Set false for headless CI/preview runs.
+      // panel:       default true. Set false for headless CI/preview runs.
+      // forceEnable: default false. Set true to keep devtools active in a
+      //              production build (e.g. staging preview).
+      // mock:        default true in dev / false in prod+forceEnable. Pair
+      //              with `forceEnable: true, mock: true` if you want the
+      //              alias active in a production preview build.
     }),
     react(),
   ],
@@ -74,8 +77,13 @@ createRoot(document.getElementById('root')!).render(
 );
 ```
 
-If you need to gate init on the polyfill having attached, use the explicit
-form instead:
+`/auto` runs `install()` as fire-and-forget, so the import statement returns
+before the shims are attached. For typical mini-app code (event handlers,
+async user actions, anything reached after first paint) this is invisible:
+shim install completes within a microtask or two, well before the user can
+trigger a Tier 1 call. **If you need to call a shimmed API at module
+evaluation time** — i.e. on the same tick as the import — use the explicit
+form below and `await` it instead.
 
 ```ts
 import { install } from '@ait-co/polyfill';
