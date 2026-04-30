@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-`apps-in-toss-community`는 비공식(unofficial) 오픈소스 커뮤니티다. 산출물에서 "공식/토스 제공" 등 제휴 암시 표현을 쓰지 않는다 — 상세는 umbrella `../CLAUDE.md`의 "프로젝트 성격" 참조.
+`apps-in-toss-community`는 비공식(unofficial) 오픈소스 커뮤니티다. 토스 팀과 제휴 없음. 산출물에서 "공식(official)", "토스가 제공하는", "powered by Toss" 등 제휴·후원·인증 암시 표현을 쓰지 않는다 — 대신 "커뮤니티/오픈소스/비공식"을 쓴다. 상세는 umbrella `../CLAUDE.md`의 "프로젝트 성격" 참조.
 
 ## 프로젝트 개요
 
