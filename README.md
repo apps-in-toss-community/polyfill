@@ -19,6 +19,8 @@ pnpm add @ait-co/polyfill
 pnpm add @apps-in-toss/web-framework   # only if you also ship a Toss build
 ```
 
+The package ships dual ESM + CJS builds, so `require('@ait-co/polyfill/auto')` works in CommonJS hosts too.
+
 ## Usage
 
 ### Just add the dep (recommended)

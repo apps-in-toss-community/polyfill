@@ -6,51 +6,101 @@
   "engines": {
     "node": ">=20"
   },
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./clipboard": {
-      "types": "./dist/shims/clipboard.d.ts",
-      "import": "./dist/shims/clipboard.js"
+      "import": {
+        "types": "./dist/shims/clipboard.d.ts",
+        "default": "./dist/shims/clipboard.js"
+      },
+      "require": {
+        "types": "./dist/shims/clipboard.d.cts",
+        "default": "./dist/shims/clipboard.cjs"
+      }
     },
     "./geolocation": {
-      "types": "./dist/shims/geolocation.d.ts",
-      "import": "./dist/shims/geolocation.js"
+      "import": {
+        "types": "./dist/shims/geolocation.d.ts",
+        "default": "./dist/shims/geolocation.js"
+      },
+      "require": {
+        "types": "./dist/shims/geolocation.d.cts",
+        "default": "./dist/shims/geolocation.cjs"
+      }
     },
     "./share": {
-      "types": "./dist/shims/share.d.ts",
-      "import": "./dist/shims/share.js"
+      "import": {
+        "types": "./dist/shims/share.d.ts",
+        "default": "./dist/shims/share.js"
+      },
+      "require": {
+        "types": "./dist/shims/share.d.cts",
+        "default": "./dist/shims/share.cjs"
+      }
     },
     "./vibrate": {
-      "types": "./dist/shims/vibrate.d.ts",
-      "import": "./dist/shims/vibrate.js"
+      "import": {
+        "types": "./dist/shims/vibrate.d.ts",
+        "default": "./dist/shims/vibrate.js"
+      },
+      "require": {
+        "types": "./dist/shims/vibrate.d.cts",
+        "default": "./dist/shims/vibrate.cjs"
+      }
     },
     "./vibrate-semantic": {
       "types": "./dist/shims/vibrate-semantic.d.ts",
       "import": "./dist/shims/vibrate-semantic.js"
     },
     "./network": {
-      "types": "./dist/shims/network.d.ts",
-      "import": "./dist/shims/network.js"
+      "import": {
+        "types": "./dist/shims/network.d.ts",
+        "default": "./dist/shims/network.js"
+      },
+      "require": {
+        "types": "./dist/shims/network.d.cts",
+        "default": "./dist/shims/network.cjs"
+      }
     },
     "./detect": {
-      "types": "./dist/detect.d.ts",
-      "import": "./dist/detect.js"
+      "import": {
+        "types": "./dist/detect.d.ts",
+        "default": "./dist/detect.js"
+      },
+      "require": {
+        "types": "./dist/detect.d.cts",
+        "default": "./dist/detect.cjs"
+      }
     },
     "./auto": {
-      "types": "./dist/auto.d.ts",
-      "import": "./dist/auto.js"
+      "import": {
+        "types": "./dist/auto.d.ts",
+        "default": "./dist/auto.js"
+      },
+      "require": {
+        "types": "./dist/auto.d.cts",
+        "default": "./dist/auto.cjs"
+      }
     }
   },
   "files": [
     "dist"
   ],
   "sideEffects": [
-    "./dist/auto.js"
+    "./dist/auto.js",
+    "./dist/auto.cjs"
   ],
   "scripts": {
     "build": "tsdown",
