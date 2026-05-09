@@ -19,6 +19,8 @@ pnpm add @ait-co/polyfill
 pnpm add @apps-in-toss/web-framework   # only if you also ship a Toss build
 ```
 
+The package ships dual ESM + CJS builds, so `require('@ait-co/polyfill/auto')` works in CommonJS hosts too.
+
 ## Usage
 
 ### Just add the dep (recommended)
@@ -60,7 +62,7 @@ import { installClipboardShim } from '@ait-co/polyfill/clipboard';
 installClipboardShim(); // installs unconditionally — gate with detect.ts if you want Toss-only
 ```
 
-The package is marked `sideEffects: ["./dist/auto.js"]`, so only the `/auto` entry is kept when tree-shaking; everything else is drop-if-unused.
+The package is marked `sideEffects: ["./dist/auto.js", "./dist/auto.cjs"]`, so only the `/auto` entry (in either format) is kept when tree-shaking; everything else is drop-if-unused.
 
 ## Environment detection
 
