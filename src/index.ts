@@ -17,6 +17,7 @@ export { installGeolocationShim, uninstallGeolocationShim } from './shims/geoloc
 export { installNetworkShim, uninstallNetworkShim } from './shims/network.js';
 export { installShareShim, uninstallShareShim } from './shims/share.js';
 export { installVibrateShim, uninstallVibrateShim } from './shims/vibrate.js';
+export { type VibrateIntent, vibrateSemantic } from './shims/vibrate-semantic.js';
 
 import { isTossEnvironment } from './detect.js';
 import { installClipboardShim, uninstallClipboardShim } from './shims/clipboard.js';

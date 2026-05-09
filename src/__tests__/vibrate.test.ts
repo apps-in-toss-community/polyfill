@@ -78,7 +78,7 @@ describe('installVibrateShim — Toss mode', () => {
     );
   });
 
-  it('maps long vibrations (≥ 40ms) to basicMedium', async () => {
+  it('maps long vibrations (≥ 46ms) to basicMedium', async () => {
     const generateHapticFeedback = vi.fn(async () => undefined);
     vi.doMock('@apps-in-toss/web-framework', () => ({
       getClipboardText: vi.fn(),
@@ -91,6 +91,44 @@ describe('installVibrateShim — Toss mode', () => {
     (navigator as Navigator & { vibrate: (p: VibratePattern) => boolean }).vibrate(200);
     await vi.waitFor(() =>
       expect(generateHapticFeedback).toHaveBeenCalledWith({ type: 'basicMedium' }),
+    );
+  });
+
+  it('maps mid-range vibrations (21–45ms) to tickMedium', async () => {
+    const generateHapticFeedback = vi.fn(async () => undefined);
+    vi.doMock('@apps-in-toss/web-framework', () => ({
+      getClipboardText: vi.fn(),
+      generateHapticFeedback,
+    }));
+
+    attachFakeNativeVibrate();
+    installVibrateShim();
+
+    (navigator as Navigator & { vibrate: (p: VibratePattern) => boolean }).vibrate(30);
+    await vi.waitFor(() =>
+      expect(generateHapticFeedback).toHaveBeenCalledWith({ type: 'tickMedium' }),
+    );
+  });
+
+  it('keeps the lower boundary stable (vibrate(20) → tickWeak; vibrate(45) → tickMedium)', async () => {
+    const generateHapticFeedback = vi.fn(async () => undefined);
+    vi.doMock('@apps-in-toss/web-framework', () => ({
+      getClipboardText: vi.fn(),
+      generateHapticFeedback,
+    }));
+
+    attachFakeNativeVibrate();
+    installVibrateShim();
+
+    (navigator as Navigator & { vibrate: (p: VibratePattern) => boolean }).vibrate(20);
+    await vi.waitFor(() =>
+      expect(generateHapticFeedback).toHaveBeenCalledWith({ type: 'tickWeak' }),
+    );
+
+    generateHapticFeedback.mockClear();
+    (navigator as Navigator & { vibrate: (p: VibratePattern) => boolean }).vibrate(45);
+    await vi.waitFor(() =>
+      expect(generateHapticFeedback).toHaveBeenCalledWith({ type: 'tickMedium' }),
     );
   });
 
