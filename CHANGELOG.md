@@ -1,5 +1,12 @@
 # @ait-co/polyfill
 
+## 0.1.6
+
+### Patch Changes
+
+- a6f775c: Ship a CommonJS build alongside the existing ESM output. `require('@ait-co/polyfill')` (and every subpath: `/clipboard`, `/geolocation`, `/share`, `/vibrate`, `/network`, `/detect`, `/auto`) now works in CJS hosts; ESM consumers are unaffected. No API surface changes.
+- 328035c: `navigator.vibrate` mapping is more precise: single-duration calls now bucket into `tickWeak` (1–20ms), `tickMedium` (21–45ms), and `basicMedium` (≥46ms) inside Apps in Toss. For callers that know their intent (`'success' | 'error' | 'warning' | 'selection'`), a new `vibrateSemantic` helper is exported from `@ait-co/polyfill/vibrate-semantic` and routes to the SDK's matching haptic. The standard `navigator.vibrate(pattern)` signature and return value are unchanged.
+
 ## 0.1.5
 
 ### Patch Changes
