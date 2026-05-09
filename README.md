@@ -78,8 +78,35 @@ Tier 1 — all shipped; paired SDK routing is live when inside Apps in Toss.
 | `navigator.geolocation.getCurrentPosition()` | `getCurrentLocation({ accuracy })` | 0.1.1 |
 | `navigator.geolocation.watchPosition()` / `clearWatch()` | `startUpdateLocation(...)` | 0.1.1 |
 | `navigator.share({ title, text, url })` | `share({ message })` (concatenates into `message`) | 0.1.1 |
-| `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` (best-effort, lossy) | 0.1.1 |
+| `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` (best-effort, lossy; see below) | 0.1.1 |
 | `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` (poll on read; no `change` for seed) | 0.1.1 |
+
+### `navigator.vibrate` mapping
+
+The Web `vibrate` spec only takes durations; the SDK's `generateHapticFeedback` is qualitative. Single-duration calls bucket like this inside Apps in Toss:
+
+| Input | SDK haptic |
+|---|---|
+| `vibrate(0)` / `vibrate([])` | no-op (cancels native pending vibration) |
+| `vibrate(1..20)` | `tickWeak` |
+| `vibrate(21..45)` | `tickMedium` |
+| `vibrate(>=46)` | `basicMedium` |
+| `vibrate([on, off, on, off, ...])` | each non-zero "on" slot fires `tap`, with `setTimeout` honouring the gaps |
+
+Length-only mapping cannot recover semantic intent (success vs. error vs. warning). When the caller knows what the haptic *means*, prefer the helper:
+
+```ts
+import { vibrateSemantic } from '@ait-co/polyfill/vibrate-semantic';
+
+vibrateSemantic('success');   // → SDK 'success'
+vibrateSemantic('error');     // → SDK 'error'
+vibrateSemantic('warning');   // → SDK 'tickMedium' (no direct variant)
+vibrateSemantic('selection'); // → SDK 'tickWeak'  (no direct variant)
+```
+
+The helper does not install anything and does not touch `navigator.vibrate`. It also re-exports from the package root (`import { vibrateSemantic } from '@ait-co/polyfill'`) for convenience, but the sub-path is the tree-shake-friendly form.
+
+Outside Apps in Toss, `vibrateSemantic` falls back to a short `navigator.vibrate(...)` so the user still gets *some* feedback. `navigator.vibrate(...)` keeps its standard signature in every environment — the helper is the only way to pass intent.
 
 See [`TODO.md`](./TODO.md) for the full backlog and tiering, and
 [`INTEGRATION.md`](./INTEGRATION.md) for an adoption guide (Vite + React

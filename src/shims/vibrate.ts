@@ -1,10 +1,18 @@
 /**
  * `navigator.vibrate` shim.
  *
- * Inside Apps in Toss → best-effort mapping to SDK `generateHapticFeedback`:
+ * Inside Apps in Toss → best-effort mapping to SDK `generateHapticFeedback`.
+ * Single-duration calls land in three buckets so the qualitative SDK haptic
+ * tracks intensity a little more closely than the original two-bucket split:
  *   - `vibrate(0)` → no-op (web standard: cancels pending vibration)
- *   - `vibrate(number)`: short (< 40ms) → `tickWeak`, long (≥ 40ms) → `basicMedium`
- *   - `vibrate(number[])`: iterate "on" segments (even indices) as `tap` pulses
+ *   - `vibrate(1..20ms)` → `tickWeak`
+ *   - `vibrate(21..45ms)` → `tickMedium`
+ *   - `vibrate(>=46ms)` → `basicMedium`
+ *   - `vibrate(number[])` → iterates "on" segments (even indices) as `tap`
+ *     pulses with `setTimeout` gaps. Per-element ms mapping is intentionally
+ *     skipped: arrays in the wild are mostly rhythmic patterns, and the SDK
+ *     has no "stronger heavy" variant to reach for, so per-pulse precision
+ *     buys little. Callers needing intent should use `vibrateSemantic`.
  *
  * Outside Apps in Toss → defers to the browser's native `navigator.vibrate`,
  * or returns `false` when unavailable (matches the spec — browsers that don't
@@ -18,7 +26,8 @@
  * Caveats (documented in CLAUDE.md as the known lossy trade-off):
  *   - SDK haptics are qualitative ("tickWeak", "basicMedium"), not millisecond
  *     durations. The shim approximates intensity from duration but cannot
- *     reproduce exact patterns.
+ *     reproduce exact patterns. Length-only mapping cannot recover semantic
+ *     intent (success vs. error vs. warning); use `vibrateSemantic` for that.
  *   - Arrays are fired sequentially via `setTimeout`; gaps between pulses are
  *     honoured only as "time until the next tap", not as silent-vs-vibrating.
  *   - `vibrate` is spec'd as **synchronous**; the SDK call is async. We return
@@ -42,7 +51,11 @@ interface BackupHost {
   [SNAPSHOT_KEY]?: MethodInstallSnapshot | undefined;
 }
 
-const SHORT_VIBRATION_MS = 40;
+// Mapping thresholds chosen so the existing dog-food cases keep their old
+// haptic (vibrate(20) → tickWeak, vibrate(50)+ → basicMedium) while a 21–45ms
+// nudge — too long for "tick", too short for "basic" — gets `tickMedium`.
+const TICK_WEAK_MAX_MS = 20;
+const TICK_MEDIUM_MAX_MS = 45;
 
 type HapticType =
   | 'tickWeak'
@@ -56,7 +69,7 @@ type HapticType =
   | 'wiggle'
   | 'confetti';
 
-async function haptic(type: HapticType): Promise<void> {
+export async function haptic(type: HapticType): Promise<void> {
   const sdk = await loadTossSdk();
   const fn = (sdk as { generateHapticFeedback?: unknown } | null)?.generateHapticFeedback;
   if (typeof fn === 'function') {
@@ -69,7 +82,9 @@ async function haptic(type: HapticType): Promise<void> {
 }
 
 function durationToHaptic(duration: number): HapticType {
-  return duration < SHORT_VIBRATION_MS ? 'tickWeak' : 'basicMedium';
+  if (duration <= TICK_WEAK_MAX_MS) return 'tickWeak';
+  if (duration <= TICK_MEDIUM_MAX_MS) return 'tickMedium';
+  return 'basicMedium';
 }
 
 function vibrateShim(pattern: VibratePattern): boolean {
