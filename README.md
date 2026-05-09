@@ -108,8 +108,7 @@ The helper does not install anything and does not touch `navigator.vibrate`. It 
 
 Outside Apps in Toss, `vibrateSemantic` falls back to a short `navigator.vibrate(...)` so the user still gets *some* feedback. `navigator.vibrate(...)` keeps its standard signature in every environment — the helper is the only way to pass intent.
 
-See [`TODO.md`](./TODO.md) for the full backlog and tiering, and
-[`INTEGRATION.md`](./INTEGRATION.md) for an adoption guide (Vite + React
+See [`INTEGRATION.md`](./INTEGRATION.md) for an adoption guide (Vite + React
 snippet, recommended pairing with `@ait-co/devtools`, per-API one-liners).
 
 APIs without a reasonable Web standard counterpart (auth, IAP, ads, analytics, Toss-specific environment info) stay in the `@apps-in-toss/web-framework` namespace — polyfill is not the home for "everything the SDK does." Rationale in [`CLAUDE.md`](./CLAUDE.md).

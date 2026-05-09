@@ -45,17 +45,29 @@ const INTENT_TO_FALLBACK_MS: Record<VibrateIntent, number> = {
 
 export function vibrateSemantic(intent: VibrateIntent): boolean {
   const sdkType = INTENT_TO_HAPTIC[intent];
-  if (sdkType === undefined) return false;
+
+  // Mirror `navigator.vibrate`'s "supported/triggered" boolean. Toss detection
+  // is async, but if the SDK isn't even loadable AND the browser has no
+  // `navigator.vibrate`, there's no surface to dispatch to — return `false`
+  // synchronously like the spec'd `vibrate()` does for unsupported environments.
+  const hasNativeVibrate =
+    typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
 
   void (async () => {
     if (await isTossEnvironment()) {
       await haptic(sdkType);
       return;
     }
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    if (hasNativeVibrate) {
       navigator.vibrate(INTENT_TO_FALLBACK_MS[intent]);
     }
   })();
 
-  return true;
+  // We can't synchronously know whether Toss detection will resolve to true,
+  // so we optimistically return `true` whenever *some* haptic surface is
+  // plausibly available: native vibrate exists, or a Toss override is forced.
+  // Only when both are absent do we report unsupported.
+  if (hasNativeVibrate) return true;
+  const force = globalThis.__AIT_POLYFILL_FORCE__;
+  return force === 'toss';
 }
