@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as detect from '../detect.js';
 import { resetDetection } from '../detect.js';
 import { installWindowOpenShim, uninstallWindowOpenShim } from '../shims/window-open.js';
 
@@ -157,13 +158,16 @@ describe('installWindowOpenShim — Toss mode', () => {
   });
 
   it('swallows SDK rejection (spec has no error channel for window.open)', async () => {
+    // Use vi.spyOn on the detect module so the spy is visible to window-open.ts
+    // via the same ESM live binding, regardless of vi.doMock / vi.resetModules
+    // ordering across test files. vi.doMock is fragile when a sibling file
+    // (devtools-composition.test.ts) has a hoisted vi.mock for the same module.
     const openURL = vi.fn(async (_u: string) => {
       throw new Error('SDK boom');
     });
-    vi.doMock('@apps-in-toss/web-framework', () => ({
-      getClipboardText: vi.fn(),
+    vi.spyOn(detect, 'loadTossSdk').mockResolvedValue({
       openURL,
-    }));
+    } as unknown as typeof import('@apps-in-toss/web-framework'));
 
     attachFakeNativeOpen();
     installWindowOpenShim();
