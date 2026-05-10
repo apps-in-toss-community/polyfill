@@ -142,10 +142,12 @@ who only want one or two shims:
 ```ts
 import { installClipboardShim } from '@ait-co/polyfill/clipboard';
 import { installGeolocationShim } from '@ait-co/polyfill/geolocation';
+import { installWindowOpenShim } from '@ait-co/polyfill/window-open';
 // ...
 
 installClipboardShim();      // installs unconditionally
 installGeolocationShim();
+installWindowOpenShim();
 ```
 
 Per-API installers do **not** run the Toss-detection check themselves — they

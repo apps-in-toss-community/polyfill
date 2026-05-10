@@ -96,8 +96,14 @@ function openShim(url?: string | URL, target?: string, _features?: string): Wind
 
   if (toss === undefined && route) {
     // Detection hasn't resolved yet. Kick it off to seed the cache for next
-    // time, but don't await — `window.open` is sync. Fall through to native
-    // for *this* call so we don't silently drop a popup the user clicked on.
+    // time, but don't await — `window.open` is sync. **The current call falls
+    // through to native regardless of environment.** This only matters via
+    // the per-API entry path (`installWindowOpenShim()` called directly with
+    // no `__AIT_POLYFILL_FORCE__` override): the first `window.open` issued
+    // before detection resolves will be native-handled even inside a real
+    // Toss runtime. Subsequent calls (after the cache fills) route correctly.
+    // Top-level `install()` awaits detection before installing this shim, so
+    // this branch is unreachable on that path.
     void isTossEnvironment();
   }
 

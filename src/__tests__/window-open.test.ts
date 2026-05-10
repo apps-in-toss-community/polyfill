@@ -1,6 +1,25 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetDetection } from '../detect.js';
 import { installWindowOpenShim, uninstallWindowOpenShim } from '../shims/window-open.js';
+
+// Capture jsdom's original `window.open` descriptor at module load so each
+// test's `attachFakeNativeOpen` can be unwound at the end of the file. Without
+// this the last-installed `vi.fn()` would persist on `window` after this file
+// finishes — invisible inside this file (each beforeEach reattaches), but it
+// can leak into later test files sharing the jsdom environment.
+let originalOpenDescriptor: PropertyDescriptor | undefined;
+
+beforeAll(() => {
+  originalOpenDescriptor = Object.getOwnPropertyDescriptor(window, 'open');
+});
+
+afterAll(() => {
+  if (originalOpenDescriptor) {
+    Object.defineProperty(window, 'open', originalOpenDescriptor);
+  } else {
+    delete (window as unknown as { open?: unknown }).open;
+  }
+});
 
 function attachFakeNativeOpen() {
   const open = vi.fn((_url?: string | URL, _target?: string, _features?: string) => null);
