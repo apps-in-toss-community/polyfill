@@ -103,7 +103,9 @@
     "./dist/auto.cjs"
   ],
   "scripts": {
+    "prebuild": "pnpm build:og",
     "build": "tsdown",
+    "build:og": "TSX_TSCONFIG_PATH=scripts/tsconfig.json tsx scripts/build-og-image.tsx",
     "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -124,8 +126,13 @@
     "@biomejs/biome": "2.4.12",
     "@changesets/cli": "^2.31.0",
     "@types/node": "^24.0.0",
+    "@types/react": "^19.2.14",
     "jsdom": "^29.0.2",
+    "react": "^19.2.5",
+    "satori": "^0.26.0",
+    "sharp": "^0.34.5",
     "tsdown": "^0.21.7",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
   },
