@@ -3,10 +3,13 @@ import { resetDetection } from '../detect.js';
 import { installWindowOpenShim, uninstallWindowOpenShim } from '../shims/window-open.js';
 
 // Capture jsdom's original `window.open` descriptor at module load so each
-// test's `attachFakeNativeOpen` can be unwound at the end of the file. Without
-// this the last-installed `vi.fn()` would persist on `window` after this file
-// finishes — invisible inside this file (each beforeEach reattaches), but it
-// can leak into later test files sharing the jsdom environment.
+// test's `attachFakeNativeOpen` can be unwound at the end of the file. Under
+// vitest's default `isolate: true` each file gets its own worker / jsdom, so
+// in this repo's current config the leak this guards against does not actually
+// happen — the cleanup is defensive against future config changes (e.g.
+// `pool: 'vmForks'` with `isolate: false`, watch-mode environment reuse) and
+// keeps this file self-contained without making implicit assumptions about
+// the runner's isolation model.
 let originalOpenDescriptor: PropertyDescriptor | undefined;
 
 beforeAll(() => {
