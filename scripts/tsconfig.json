@@ -12,6 +12,5 @@
     "noEmit": true,
     "isolatedModules": true,
     "types": ["node", "react"]
-  },
-  "include": ["**/*.ts", "**/*.tsx"]
+  }
 }

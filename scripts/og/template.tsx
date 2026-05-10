@@ -45,7 +45,7 @@ export function OgTemplate({ eyebrow, title, subtitle, footer }: OgTemplateProps
           style={{
             color: COLORS.white,
             fontSize: 110,
-            fontWeight: 800,
+            fontWeight: 700,
             letterSpacing: '-3px',
           }}
         >
@@ -76,7 +76,7 @@ export function OgTemplate({ eyebrow, title, subtitle, footer }: OgTemplateProps
           style={{
             color: COLORS.fg,
             fontSize: 52,
-            fontWeight: 800,
+            fontWeight: 700,
             letterSpacing: '-2px',
             marginTop: 18,
             lineHeight: 1.1,

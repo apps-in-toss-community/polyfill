@@ -26,7 +26,7 @@ async function loadFonts(): Promise<Parameters<typeof satori>[1]['fonts']> {
   return [
     { name: 'Pretendard', data: medium, weight: 500, style: 'normal' },
     { name: 'Pretendard', data: semibold, weight: 600, style: 'normal' },
-    { name: 'Pretendard', data: bold, weight: 800, style: 'normal' },
+    { name: 'Pretendard', data: bold, weight: 700, style: 'normal' },
   ];
 }
 
