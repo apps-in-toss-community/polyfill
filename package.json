@@ -114,7 +114,7 @@
     "format": "biome format --write ."
   },
   "peerDependencies": {
-    "@apps-in-toss/web-framework": ">=2.5.0 <2.6.0"
+    "@apps-in-toss/web-framework": ">=2.4.0 <3.0.0"
   },
   "peerDependenciesMeta": {
     "@apps-in-toss/web-framework": {
