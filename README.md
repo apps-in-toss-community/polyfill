@@ -84,6 +84,46 @@ Tier 1 — all shipped; paired SDK routing is live when inside Apps in Toss.
 | `navigator.share({ title, text, url })` | `share({ message })` (concatenates into `message`) | 0.1.1 |
 | `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` (best-effort, lossy; see below) | 0.1.1 |
 | `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` (poll on read; no `change` for seed) | 0.1.1 |
+| `window.open(url, '_blank')` (Tier 2, limited) | `openURL(url)` — `_blank` only, returns a stub Window; see [Tier 2 evaluation](#tier-2-evaluation-2026-05) | 0.1.x |
+
+### Tier 1 verification status (2026-05)
+
+Each Tier 1 shim is exercised on three layers before it is considered shipped:
+its own `*.test.ts` (unit, three branches: Toss-mock, browser-only, neither),
+the cross-cutting `devtools-composition.test.ts` (single `install()` driving
+all shims through a devtools-shaped SDK mock), and an end-to-end ApiCard in
+`apps-in-toss-community/sdk-example` that calls the **standard Web API**
+directly. A real Apps in Toss app sanity check on miniApp `31146`
+(`aitc-sdk-example`) is the final layer; that miniApp is currently in REVIEW
+lock so the column reads "pending" — none of the unit / composition / e2e
+gates have ever broken on a Tier 1 shim, so the lock-blocked sanity is purely
+confirmatory.
+
+| Shim | Unit | devtools-composition | sdk-example e2e | Real Apps in Toss app |
+|---|---|---|---|---|
+| clipboard    | ✅ | ✅ | ✅ | pending (31146 REVIEW lock) |
+| geolocation  | ✅ | ✅ | ✅ | pending |
+| share        | ✅ | ✅ | ✅ | pending |
+| vibrate      | ✅ | ✅ | ✅ | pending |
+| network      | ✅ | ✅ | ✅ | pending |
+
+When the REVIEW lock on `31146` is released, the real-app column will be
+filled in via a follow-up PR; no shim changes are expected to fall out of
+that step.
+
+## Tier 2 evaluation (2026-05)
+
+The Tier 2 candidates listed in earlier roadmaps were assessed against the
+SDK 2.5.0 surface (`@apps-in-toss/web-bridge` exports). Of the four, one
+ships in a deliberately limited form and three are formally moved to
+out-of-scope.
+
+| Candidate | Decision | Rationale |
+|---|---|---|
+| `window.open` ↔ SDK `openURL` | **ship limited** | `openURL` opens the URL in the device's default browser / associated app via React Native's `Linking.openURL`, which only matches the `_blank` "open elsewhere" semantic of `window.open`. The shim routes only `target='_blank'` (or omitted target); `_self` and named targets fall through to native. The returned `Window` is a no-op stub (`closed: true`, methods are no-ops) — code that drives the popup will not work and should call `openURL` directly. |
+| `localStorage` ↔ SDK Storage | **skip → out-of-scope** | The SDK ships no Storage counterpart at all, and `localStorage` is sync (`getItem` returns a string immediately) while any RN-bridged storage would have to be async. The native `localStorage` already works in the Apps in Toss WebView, so no shim is needed and a "polyfill" would only widen surface area. |
+| `history.back()` ↔ SDK `closeView` | **skip → out-of-scope** | `closeView` closes the entire mini-app view (described as "닫기 버튼 … 서비스를 종료할 때") — not a nav-stack pop. Mapping `history.back()` to `closeView()` would silently terminate the mini-app whenever a sub-route wanted to go back. There is no safe heuristic for "is this the bottom of the nav stack" that doesn't false-positive. |
+| `document.visibilityState` / `visibilitychange` | **skip — unnecessary** | The standard Page Visibility API already works inside the Apps in Toss WebView, and `onVisibilityChangedByTransparentServiceWeb` is a transparent-service-specific event with a different shape. No polyfill required. |
 
 ### `navigator.vibrate` mapping
 
@@ -112,10 +152,30 @@ The helper does not install anything and does not touch `navigator.vibrate`. It 
 
 Outside Apps in Toss, `vibrateSemantic` falls back to a short `navigator.vibrate(...)` so the user still gets *some* feedback. `navigator.vibrate(...)` keeps its standard signature in every environment — the helper is the only way to pass intent.
 
+### `window.open` mapping (Tier 2, limited)
+
+```ts
+window.open('https://example.com', '_blank'); // → SDK openURL (device browser)
+window.open('https://example.com');            // (target omitted) → SDK openURL
+window.open('https://example.com', '_self');   // → native (in-document nav)
+window.open('https://example.com', 'myPopup'); // → native (named target)
+```
+
+The returned object in the routed (`_blank`) case is a **no-op stub Window**:
+`closed` is `true` from the start, and `close` / `focus` / `blur` /
+`postMessage` are silent no-ops. Code that depends on driving the popup
+window (form submission, `postMessage` round-trips, polling for `closed`) is
+not supported via the shim — call `openURL` from
+`@apps-in-toss/web-framework` directly when you need that.
+
 See [`INTEGRATION.md`](./INTEGRATION.md) for an adoption guide (Vite + React
 snippet, recommended pairing with `@ait-co/devtools`, per-API one-liners).
 
 APIs without a reasonable Web standard counterpart (auth, IAP, ads, analytics, Toss-specific environment info) stay in the `@apps-in-toss/web-framework` namespace — polyfill is not the home for "everything the SDK does." Rationale in [`CLAUDE.md`](./CLAUDE.md).
+
+The Tier 2 candidates that landed as out-of-scope (Storage, `history.back`,
+`visibilitychange`) are listed with rationale in
+[Tier 2 evaluation](#tier-2-evaluation-2026-05).
 
 ## Development
 

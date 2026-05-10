@@ -77,6 +77,11 @@ export default defineConfig([
   },
   {
     ...common,
+    entry: { 'shims/window-open': 'src/shims/window-open.ts' },
+    format: formats,
+  },
+  {
+    ...common,
     entry: { detect: 'src/detect.ts' },
     format: formats,
   },

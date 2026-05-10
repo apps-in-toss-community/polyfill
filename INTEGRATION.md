@@ -124,6 +124,9 @@ navigator.vibrate(50); // returns true; SDK call is fire-and-forget
 
 // 5. Network
 console.log(navigator.onLine, navigator.connection?.effectiveType, navigator.connection?.type);
+
+// 6. window.open (Tier 2, limited — _blank only; returned Window is a no-op stub)
+window.open('https://example.com', '_blank');
 ```
 
 See [`README.md`](./README.md#supported-apis) for the SDK-side counterpart of

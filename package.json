@@ -74,6 +74,16 @@
         "default": "./dist/shims/network.cjs"
       }
     },
+    "./window-open": {
+      "import": {
+        "types": "./dist/shims/window-open.d.ts",
+        "default": "./dist/shims/window-open.js"
+      },
+      "require": {
+        "types": "./dist/shims/window-open.d.cts",
+        "default": "./dist/shims/window-open.cjs"
+      }
+    },
     "./detect": {
       "import": {
         "types": "./dist/detect.d.ts",
