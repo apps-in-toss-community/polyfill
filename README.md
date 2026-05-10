@@ -1,5 +1,7 @@
 # @ait-co/polyfill
 
+![@ait-co/polyfill — 표준 Web API로 미니앱을 작성](./assets/og/image.png)
+
 > Part of the unofficial `apps-in-toss-community` project. Not affiliated with Toss.
 > 비공식 커뮤니티 프로젝트입니다. 토스와 제휴하지 않았습니다.
 
