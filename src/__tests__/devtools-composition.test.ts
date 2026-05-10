@@ -50,6 +50,7 @@ const handles = vi.hoisted(() => ({
   share: vi.fn(async (_o: { message: string }) => undefined),
   generateHapticFeedback: vi.fn(async (_o: { type: string }) => undefined),
   getNetworkStatus: vi.fn(async () => 'WIFI' as const),
+  openURL: vi.fn(async (_u: string) => undefined),
 }));
 
 vi.mock('@apps-in-toss/web-framework', () => ({
@@ -65,6 +66,7 @@ vi.mock('@apps-in-toss/web-framework', () => ({
     handles.generateHapticFeedback(...args),
   getNetworkStatus: (...args: Parameters<typeof handles.getNetworkStatus>) =>
     handles.getNetworkStatus(...args),
+  openURL: (...args: Parameters<typeof handles.openURL>) => handles.openURL(...args),
 }));
 
 import { isTossEnvironment, resetDetection } from '../detect.js';
@@ -95,7 +97,7 @@ describe('devtools + polyfill composition (no force override)', () => {
     globalThis.__AIT_POLYFILL_FORCE__ = undefined;
   });
 
-  it('routes all five Tier 1 APIs through the devtools-shaped SDK mock', async () => {
+  it('routes all five Tier 1 APIs (and Tier 2 window.open) through the devtools-shaped SDK mock', async () => {
     const off = await install();
     expect(typeof off).toBe('function');
 
@@ -143,6 +145,12 @@ describe('devtools + polyfill composition (no force override)', () => {
     ).connection;
     expect(connection?.effectiveType).toBe('4g');
     expect(connection?.type).toBe('wifi');
+
+    // 6. window.open (Tier 2, limited) — _blank routes to SDK openURL and
+    // returns a stub window. _self falls through to the captured native.
+    const popup = window.open('https://example.com', '_blank');
+    expect(popup).not.toBeNull();
+    await vi.waitFor(() => expect(handles.openURL).toHaveBeenCalledWith('https://example.com'));
   });
 
   it('detects Toss via getAppsInTossGlobals without any force override', async () => {

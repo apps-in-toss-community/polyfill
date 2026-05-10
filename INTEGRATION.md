@@ -124,6 +124,9 @@ navigator.vibrate(50); // returns true; SDK call is fire-and-forget
 
 // 5. Network
 console.log(navigator.onLine, navigator.connection?.effectiveType, navigator.connection?.type);
+
+// 6. window.open (Tier 2, limited — _blank only; returned Window is a no-op stub)
+window.open('https://example.com', '_blank');
 ```
 
 See [`README.md`](./README.md#supported-apis) for the SDK-side counterpart of
@@ -139,10 +142,12 @@ who only want one or two shims:
 ```ts
 import { installClipboardShim } from '@ait-co/polyfill/clipboard';
 import { installGeolocationShim } from '@ait-co/polyfill/geolocation';
+import { installWindowOpenShim } from '@ait-co/polyfill/window-open';
 // ...
 
 installClipboardShim();      // installs unconditionally
 installGeolocationShim();
+installWindowOpenShim();
 ```
 
 Per-API installers do **not** run the Toss-detection check themselves — they

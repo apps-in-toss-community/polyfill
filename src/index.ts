@@ -18,6 +18,7 @@ export { installNetworkShim, uninstallNetworkShim } from './shims/network.js';
 export { installShareShim, uninstallShareShim } from './shims/share.js';
 export { installVibrateShim, uninstallVibrateShim } from './shims/vibrate.js';
 export { type VibrateIntent, vibrateSemantic } from './shims/vibrate-semantic.js';
+export { installWindowOpenShim, uninstallWindowOpenShim } from './shims/window-open.js';
 
 import { isTossEnvironment } from './detect.js';
 import { installClipboardShim, uninstallClipboardShim } from './shims/clipboard.js';
@@ -25,6 +26,7 @@ import { installGeolocationShim, uninstallGeolocationShim } from './shims/geoloc
 import { installNetworkShim, uninstallNetworkShim } from './shims/network.js';
 import { installShareShim, uninstallShareShim } from './shims/share.js';
 import { installVibrateShim, uninstallVibrateShim } from './shims/vibrate.js';
+import { installWindowOpenShim, uninstallWindowOpenShim } from './shims/window-open.js';
 
 export const VERSION: string = __VERSION__;
 
@@ -39,10 +41,10 @@ const NOOP = (): void => {};
  * environment turns out not to be Toss, the uninstall function is a no-op.
  *
  * Install order (when active): clipboard → geolocation → share → vibrate →
- * network. Not atomic on failure — if a per-shim install throws (e.g., a
- * consumer pinned a target navigator property as non-configurable), earlier
- * shims are already in place. Callers should catch and invoke the returned
- * uninstall to roll back.
+ * network → window.open. Not atomic on failure — if a per-shim install throws
+ * (e.g., a consumer pinned a target navigator property as non-configurable),
+ * earlier shims are already in place. Callers should catch and invoke the
+ * returned uninstall to roll back.
  */
 export async function install(): Promise<() => void> {
   if (!(await isTossEnvironment())) return NOOP;
@@ -52,6 +54,7 @@ export async function install(): Promise<() => void> {
     installShareShim(),
     installVibrateShim(),
     installNetworkShim(),
+    installWindowOpenShim(),
   ];
   return () => {
     for (const fn of uninstalls) fn();
@@ -68,4 +71,5 @@ export function uninstall(): void {
   uninstallShareShim();
   uninstallVibrateShim();
   uninstallNetworkShim();
+  uninstallWindowOpenShim();
 }
