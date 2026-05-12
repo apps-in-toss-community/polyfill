@@ -28,11 +28,16 @@
  * browser's own `onLine`/`connection` values; the SDK-synced state is simply
  * disabled for that session.
  *
- * Caveat: the Web NetworkInformation API is evented (`change` fires on
- * transitions). The SDK exposes only a one-shot query, so listeners attached
- * to `navigator.connection` are accepted but never fire from a `change` event
- * unless the shim observes a real status transition. Synthesising richer
- * events via polling is tracked in TODO.md.
+ * `change` event synthesis via periodic polling:
+ *   When at least one `change` listener is registered on `navigator.connection`
+ *   (either via `addEventListener('change', …)` or the `onchange` setter),
+ *   the shim starts a `setInterval` at `POLLING_INTERVAL_MS` (default 2 000 ms)
+ *   that calls `getNetworkStatus()` and dispatches a `change` Event on the
+ *   ShimConnection instance whenever any of `effectiveType`, `type`,
+ *   `downlink`, `rtt`, or `saveData` would change. The interval stops
+ *   automatically when the last listener is removed — idle cost is zero.
+ *   The polling interval is exported as `CONNECTION_POLLING_INTERVAL_MS` for
+ *   consumers that want to know the granularity of transition detection.
  *
  * Lifecycle: `navigator.connection` is a ShimConnection instance that lives in
  * the install closure. On uninstall the instance-level override is removed,
@@ -59,17 +64,36 @@ import {
 const INSTALLED_KEY = Symbol.for('@ait-co/polyfill/network.installed');
 const ON_LINE_SNAPSHOT_KEY = Symbol.for('@ait-co/polyfill/network.onLine.snapshot');
 const CONNECTION_SNAPSHOT_KEY = Symbol.for('@ait-co/polyfill/network.connection.snapshot');
+// Stores the `stopPolling` closure so `uninstallNetworkShim()` can clear the
+// interval even though polling state lives inside the install closure.
+const POLL_STOP_KEY = Symbol.for('@ait-co/polyfill/network.pollStop');
 
 interface BackupHost {
   [INSTALLED_KEY]?: boolean;
   [ON_LINE_SNAPSHOT_KEY]?: InstallSnapshot | undefined;
   [CONNECTION_SNAPSHOT_KEY]?: InstallSnapshot | undefined;
+  [POLL_STOP_KEY]?: (() => void) | undefined;
 }
 
 type SdkNetworkStatus = 'OFFLINE' | 'WIFI' | '2G' | '3G' | '4G' | '5G' | 'WWAN' | 'UNKNOWN';
 type EffectiveType = 'slow-2g' | '2g' | '3g' | '4g';
 
 const REFRESH_THROTTLE_MS = 500;
+
+/**
+ * How often (in ms) the shim polls `getNetworkStatus()` when at least one
+ * `change` listener is registered. Polling stops automatically when all
+ * listeners are removed — idle cost is zero.
+ *
+ * 2 000 ms is a balanced default: responsive enough to catch transitions
+ * within a couple of seconds while keeping SDK round-trips infrequent.
+ * Exported so consumers can document the detection granularity.
+ */
+export const CONNECTION_POLLING_INTERVAL_MS = 2_000;
+
+// Symbol used to inject the polling start/stop hooks into ShimConnection
+// without exposing them on the public surface.
+const SET_POLL_HOOKS = Symbol('@ait-co/polyfill/network.setPollHooks');
 
 function statusToOnline(status: SdkNetworkStatus): boolean {
   return status !== 'OFFLINE';
@@ -115,17 +139,84 @@ const SET_STATUS = Symbol('@ait-co/polyfill/network.setStatus');
 
 class ShimConnection extends EventTarget {
   #status: SdkNetworkStatus | null = null;
-  onchange: ((this: ShimConnection, ev: Event) => unknown) | null = null;
+  // Listener count for `change` events (tracks both addEventListener and
+  // the `onchange` attribute slot).
+  #changeListenerCount = 0;
+  // Injected by the install closure — called when the first `change` listener
+  // is added or the last one is removed, so polling can start/stop.
+  #onFirstChangeListener: (() => void) | null = null;
+  #onLastChangeListenerRemoved: (() => void) | null = null;
+
+  // DOM-style attribute. Setting a non-null handler is treated as one listener
+  // for the purpose of the polling lifecycle (toggling on/off counts as
+  // add/remove).
+  #onchange: ((this: ShimConnection, ev: Event) => unknown) | null = null;
+  get onchange(): ((this: ShimConnection, ev: Event) => unknown) | null {
+    return this.#onchange;
+  }
+  set onchange(handler: ((this: ShimConnection, ev: Event) => unknown) | null) {
+    const hadHandler = this.#onchange !== null;
+    this.#onchange = handler;
+    const hasHandler = handler !== null;
+    if (!hadHandler && hasHandler) this.#incrementChangeListeners();
+    else if (hadHandler && !hasHandler) this.#decrementChangeListeners();
+  }
 
   constructor() {
     super();
-    // Forward `change` events to the legacy `onchange` handler for parity with
-    // the NetworkInformation API.
-    this.addEventListener('change', (ev) => this.onchange?.call(this, ev));
+    // Forward `change` events to the `onchange` attribute handler for parity
+    // with the standard NetworkInformation API.
+    // Note: this internal listener does NOT participate in the count — it is
+    // installed unconditionally and is managed by the `onchange` setter above.
+    super.addEventListener('change', (ev) => this.#onchange?.call(this, ev));
+  }
+
+  // Intercept addEventListener/removeEventListener for 'change' to track
+  // the listener count and start/stop polling accordingly.
+  override addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    super.addEventListener(type, listener, options);
+    if (type === 'change' && listener !== null) {
+      this.#incrementChangeListeners();
+    }
+  }
+
+  override removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    super.removeEventListener(type, listener, options);
+    if (type === 'change' && listener !== null) {
+      this.#decrementChangeListeners();
+    }
+  }
+
+  #incrementChangeListeners(): void {
+    this.#changeListenerCount++;
+    if (this.#changeListenerCount === 1) {
+      this.#onFirstChangeListener?.();
+    }
+  }
+
+  #decrementChangeListeners(): void {
+    if (this.#changeListenerCount <= 0) return;
+    this.#changeListenerCount--;
+    if (this.#changeListenerCount === 0) {
+      this.#onLastChangeListenerRemoved?.();
+    }
   }
 
   [SET_STATUS](next: SdkNetworkStatus | null): void {
     this.#status = next;
+  }
+
+  [SET_POLL_HOOKS](onFirst: () => void, onLast: () => void): void {
+    this.#onFirstChangeListener = onFirst;
+    this.#onLastChangeListenerRemoved = onLast;
   }
 
   get effectiveType(): EffectiveType {
@@ -164,6 +255,7 @@ export function installNetworkShim(): () => void {
   let cachedStatus: SdkNetworkStatus | null = null;
   let lastRefresh = 0;
   let inflight: Promise<void> | null = null;
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
   const connection = new ShimConnection();
 
   async function refresh(): Promise<void> {
@@ -200,6 +292,30 @@ export function installNetworkShim(): () => void {
     })();
     return inflight;
   }
+
+  // Polling lifecycle — driven by the listener count inside ShimConnection.
+  // The interval only runs while at least one `change` listener is registered,
+  // so there is zero idle overhead when no one is listening.
+  function startPolling(): void {
+    if (pollTimer !== null) return; // already running
+    // Kick an immediate poll so the first transition isn't delayed by a full
+    // interval tick when a listener is first attached mid-session.
+    void refresh();
+    pollTimer = setInterval(() => void refresh(), CONNECTION_POLLING_INTERVAL_MS);
+  }
+
+  function stopPolling(): void {
+    if (pollTimer === null) return;
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  // Wire the polling start/stop hooks into the ShimConnection instance.
+  connection[SET_POLL_HOOKS](startPolling, stopPolling);
+
+  // Expose stopPolling on the host so uninstallNetworkShim() (which has no
+  // access to the install closure) can stop the interval.
+  host[POLL_STOP_KEY] = stopPolling;
 
   // Capture the native values **before** we install so the getters can fall
   // through without needing to temporarily remove their own shadow (which is
@@ -261,6 +377,11 @@ export function uninstallNetworkShim(): void {
   const host = navigator as unknown as BackupHost;
   if (!host[INSTALLED_KEY]) return;
 
+  // Stop any active poll before restoring descriptors so no in-flight tick
+  // fires after the ShimConnection is orphaned.
+  const stopFn = host[POLL_STOP_KEY];
+  if (typeof stopFn === 'function') stopFn();
+
   const onLineSnap = host[ON_LINE_SNAPSHOT_KEY];
   if (onLineSnap) restoreNavigatorProperty('onLine', onLineSnap);
   const connSnap = host[CONNECTION_SNAPSHOT_KEY];
@@ -269,4 +390,5 @@ export function uninstallNetworkShim(): void {
   delete host[INSTALLED_KEY];
   delete host[ON_LINE_SNAPSHOT_KEY];
   delete host[CONNECTION_SNAPSHOT_KEY];
+  delete host[POLL_STOP_KEY];
 }

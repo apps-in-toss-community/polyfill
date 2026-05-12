@@ -14,7 +14,11 @@
 export { isTossEnvironment, isTossEnvironmentCached, loadTossSdk } from './detect.js';
 export { installClipboardShim, uninstallClipboardShim } from './shims/clipboard.js';
 export { installGeolocationShim, uninstallGeolocationShim } from './shims/geolocation.js';
-export { installNetworkShim, uninstallNetworkShim } from './shims/network.js';
+export {
+  CONNECTION_POLLING_INTERVAL_MS,
+  installNetworkShim,
+  uninstallNetworkShim,
+} from './shims/network.js';
 export { installShareShim, uninstallShareShim } from './shims/share.js';
 export { installVibrateShim, uninstallVibrateShim } from './shims/vibrate.js';
 export { type VibrateIntent, vibrateSemantic } from './shims/vibrate-semantic.js';
