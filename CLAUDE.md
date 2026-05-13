@@ -2,7 +2,9 @@
 
 ## 프로젝트 성격
 
-`apps-in-toss-community`는 **비공식(unofficial) 오픈소스 커뮤니티**다. 토스/앱인토스 팀과 제휴·후원·인증 관계가 없다. 사용자에게 보여지는 모든 산출물(README, UI 카피, 패키지 설명, 커밋/PR 메시지, 코드 주석 등)에서 "공식(official)", "토스가 제공하는", "앱인토스에서 만든", "powered by Toss" 같은 제휴·후원·인증을 암시하는 표현을 **쓰지 않는다**. 대신 "커뮤니티(community)", "오픈소스", "비공식(unofficial)"을 쓴다. 의심스러우면 빼라.
+`apps-in-toss-community`는 토스/앱인토스 팀과 제휴 관계가 없는 커뮤니티 프로젝트다. 사용자에게 보여지는 모든 산출물(README, UI 카피, 패키지 설명, 커밋/PR 메시지, 코드 주석 등)에서 "공식(official)", "토스가 제공하는", "앱인토스에서 만든", "powered by Toss" 같은 제휴·후원·인증을 암시하는 표현을 쓰지 않는다. 대신 "커뮤니티(community)" 같은 자연스러운 표현. 의심스러우면 빼라.
+
+**톤 가이드** (방어적 disclaimer 금지): README 푸터에 한 줄로 1회만 명시 — `Community open-source project.` (이 repo는 영어 primary). "제휴 아님" 같은 방어적 표현 대신 "커뮤니티 오픈소스" 정체성만 자연스럽게. 헤더 직후의 `>` blockquote 박스, ⚠️ 아이콘, 굵은 글씨, `unofficial`/`비공식` 같은 강한 라벨, 영/한 병기는 모두 쓰지 않는다.
 
 이슈·제안·기능 요청은 모두 GitHub Issues로.
 
