@@ -2,9 +2,6 @@
 
 ![@ait-co/polyfill — 표준 Web API로 미니앱을 작성](./assets/og/image.png)
 
-> Part of the unofficial `apps-in-toss-community` project. Not affiliated with Toss.
-> 비공식 커뮤니티 프로젝트입니다. 토스와 제휴하지 않았습니다.
-
 Web standard API polyfill for Apps in Toss mini-apps. Write your mini-app with **standard Web APIs** (`navigator.clipboard`, `navigator.geolocation`, …) and have it transparently work inside Apps in Toss.
 
 앱인토스 미니앱에서 **웹 표준 API를 그대로 사용**해서 개발할 수 있게 해주는 polyfill. 런타임에 앱인토스 환경으로 확인된 경우에만 SDK로 라우팅하는 shim을 설치하고, 그 외 환경(일반 브라우저, 로컬 개발, 테스트)에서는 **아무것도 하지 않아** 브라우저의 원본 구현이 그대로 동작합니다.
@@ -204,3 +201,7 @@ This is a developer convenience for fast feedback before push. CI runs the same 
 ## License
 
 BSD-3-Clause
+
+---
+
+Community project. Not affiliated with Toss.
