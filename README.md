@@ -204,4 +204,4 @@ BSD-3-Clause
 
 ---
 
-Community project. Not affiliated with Toss.
+Community open-source project.
