@@ -151,7 +151,8 @@
     "toss",
     "mini-app",
     "polyfill",
-    "web-api"
+    "web-api",
+    "web-standard"
   ],
   "packageManager": "pnpm@10.33.0",
   "license": "BSD-3-Clause",

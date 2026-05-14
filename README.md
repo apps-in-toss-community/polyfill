@@ -4,6 +4,9 @@
 
 ![@ait-co/polyfill — 표준 Web API로 미니앱을 작성](./assets/og/image.png)
 
+[![npm](https://img.shields.io/npm/v/@ait-co/polyfill)](https://www.npmjs.com/package/@ait-co/polyfill)
+[![license](https://img.shields.io/badge/license-BSD--3--Clause-blue)](./LICENSE)
+
 앱인토스 미니앱에서 **웹 표준 API를 그대로 사용**해서 개발할 수 있게 해주는 polyfill. 런타임에 앱인토스 환경으로 확인된 경우에만 SDK로 라우팅하는 shim을 설치하고, 그 외 환경(일반 브라우저, 로컬 개발, 테스트)에서는 **아무것도 하지 않아** 브라우저의 원본 구현이 그대로 동작합니다.
 
 ## 설치

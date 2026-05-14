@@ -2,7 +2,10 @@
 
 [한국어](./README.md) · **English**
 
-![@ait-co/polyfill — 표준 Web API로 미니앱을 작성](./assets/og/image.png)
+![@ait-co/polyfill — Write mini-apps with standard Web APIs](./assets/og/image.png)
+
+[![npm](https://img.shields.io/npm/v/@ait-co/polyfill)](https://www.npmjs.com/package/@ait-co/polyfill)
+[![license](https://img.shields.io/badge/license-BSD--3--Clause-blue)](./LICENSE)
 
 Web standard API polyfill for Apps in Toss mini-apps. Write your mini-app with **standard Web APIs** (`navigator.clipboard`, `navigator.geolocation`, …) and have it transparently work inside Apps in Toss.
 
