@@ -82,6 +82,11 @@ export default defineConfig([
   },
   {
     ...common,
+    entry: { sentinel: 'src/sentinel.ts' },
+    format: formats,
+  },
+  {
+    ...common,
     entry: { detect: 'src/detect.ts' },
     format: formats,
   },

@@ -9,6 +9,7 @@
  * surfaces unchanged — we don't paper over missing support.
  */
 
+import '../sentinel.js';
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
 import {
   type InstallSnapshot,

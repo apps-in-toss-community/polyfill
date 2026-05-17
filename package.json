@@ -110,7 +110,9 @@
   ],
   "sideEffects": [
     "./dist/auto.js",
-    "./dist/auto.cjs"
+    "./dist/auto.cjs",
+    "./dist/sentinel.js",
+    "./dist/sentinel.cjs"
   ],
   "scripts": {
     "prebuild": "pnpm build:og",

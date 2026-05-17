@@ -11,6 +11,10 @@
  * Unofficial community project. Not affiliated with Toss.
  */
 
+// Side-effect: sets globalThis.__AIT_POLYFILL__ sentinel so devtools can
+// detect that this package is loaded. No network call is made here.
+import './sentinel.js';
+
 export { isTossEnvironment, isTossEnvironmentCached, loadTossSdk } from './detect.js';
 export { installClipboardShim, uninstallClipboardShim } from './shims/clipboard.js';
 export { installGeolocationShim, uninstallGeolocationShim } from './shims/geolocation.js';

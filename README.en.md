@@ -181,6 +181,18 @@ The Tier 2 candidates that landed as out-of-scope (Storage, `history.back`,
 `visibilitychange`) are listed with rationale in
 [Tier 2 evaluation](#tier-2-evaluation-2026-05).
 
+## Telemetry / Sentinel
+
+This package sends no telemetry of its own. It does expose a `globalThis.__AIT_POLYFILL__` sentinel so the devtools companion can detect that the polyfill is loaded. When devtools is active and opt-out is not applied, devtools may include this signal in an anonymous daily ping.
+
+```ts
+// read-only, non-enumerable — do not use in application code.
+// This is an internal contract consumed by devtools.
+globalThis.__AIT_POLYFILL__; // { version: string; loaded: true }
+```
+
+Privacy policy: [apps-in-toss-community/metrics-ingest](https://github.com/apps-in-toss-community/metrics-ingest)
+
 ## Development
 
 ```sh
