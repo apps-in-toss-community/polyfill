@@ -144,7 +144,7 @@ SDK 2.5.0 (`@apps-in-toss/web-bridge`) 기준 4개 후보 평가. 핵심은 **SD
 - SDK `getNetworkStatus()`는 one-shot async, web `navigator.onLine`은 sync getter. Gap을 메우는 방식:
   - install 시 `getNetworkStatus()`를 non-blocking 호출로 cache seed.
   - 이후 read마다 background refresh + cached value 반환. 첫 read 전엔 native value (jsdom 기본 `true`) fallback.
-  - `change` 이벤트는 **합성하지 않는다**. 전환 감지 필요하면 소비자가 polling.
+  - `change` 이벤트를 **polling으로 합성**한다 (#34): `change` listener가 1개 이상 등록되면 `CONNECTION_POLLING_INTERVAL_MS` 간격으로 `getNetworkStatus()`를 호출, 이전 snapshot과 `type`/`downlink`/`rtt`/`saveData`가 다르면 `change` Event dispatch. listener가 모두 제거되면 polling 자동 중지.
 - `WIFI` / `WWAN` / `UNKNOWN` → `effectiveType: '4g'`.
 - `type`(비표준): `WIFI → 'wifi'`, cellular group → `'cellular'`, `OFFLINE → 'none'`.
 
