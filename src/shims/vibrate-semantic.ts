@@ -20,6 +20,7 @@
  * available — mirroring `navigator.vibrate`'s "supported/triggered" boolean.
  */
 
+import '../sentinel.js';
 import { isTossEnvironment } from '../detect.js';
 import { haptic } from './vibrate.js';
 

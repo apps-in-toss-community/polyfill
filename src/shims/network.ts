@@ -54,6 +54,7 @@
  * reads may return the native object.
  */
 
+import '../sentinel.js';
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
 import {
   type InstallSnapshot,

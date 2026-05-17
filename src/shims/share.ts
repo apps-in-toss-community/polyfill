@@ -19,6 +19,7 @@
  * says Toss is active (or is being forced via the test override).
  */
 
+import '../sentinel.js';
 import { isTossEnvironment, isTossEnvironmentCached, loadTossSdk } from '../detect.js';
 import {
   installObjectMethods,

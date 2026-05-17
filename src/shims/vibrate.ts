@@ -34,6 +34,7 @@
  *     `true` immediately (fire-and-forget). Errors from the SDK are swallowed.
  */
 
+import '../sentinel.js';
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
 import {
   installObjectMethods,

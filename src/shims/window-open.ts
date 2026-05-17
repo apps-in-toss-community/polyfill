@@ -30,6 +30,7 @@
  * uninstall is sufficient. We do not touch `Window.prototype`.
  */
 
+import '../sentinel.js';
 import { isTossEnvironment, isTossEnvironmentCached, loadTossSdk } from '../detect.js';
 
 const BACKUP_KEY = Symbol.for('@ait-co/polyfill/window-open.original');

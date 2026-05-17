@@ -34,6 +34,7 @@
  * `uninstall()`.
  */
 
+import '../sentinel.js';
 import { isTossEnvironment, loadTossSdk } from '../detect.js';
 import {
   installObjectMethods,
