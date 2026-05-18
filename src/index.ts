@@ -1,14 +1,12 @@
 /**
- * @ait-co/polyfill
+ * @ait-co/polyfill — community open-source polyfill that backfills Web APIs
+ * missing from Apps in Toss mini-app WebViews.
  *
- * Write Apps in Toss mini-apps using standard Web APIs
- * (`navigator.clipboard`, `navigator.geolocation`, …). This polyfill routes
- * calls through the Apps in Toss SDK **only when we detect we are actually
- * running inside the Toss app** — in every other environment (a plain browser,
- * local dev, tests) the shims are not installed and the browser's native
- * implementations are used as-is.
- *
- * Unofficial community project. Not affiliated with Toss.
+ * Write mini-apps using standard Web APIs (`navigator.clipboard`,
+ * `navigator.geolocation`, …). This polyfill routes calls through the Apps in
+ * Toss SDK **only when we detect we are actually running inside the Toss app**
+ * — in every other environment (a plain browser, local dev, tests) the shims
+ * are not installed and the browser's native implementations are used as-is.
  */
 
 // Side-effect: sets globalThis.__AIT_POLYFILL__ sentinel so devtools can
