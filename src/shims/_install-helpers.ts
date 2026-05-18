@@ -142,13 +142,13 @@ export function installObjectMethods(
       bag[key] = replacements[key] as unknown;
     } catch {
       // Non-writable / frozen. Roll back and return null.
-      for (const applieKey of applied) {
-        const prev = methods[applieKey];
+      for (const appliedKey of applied) {
+        const prev = methods[appliedKey];
         if (!prev) continue;
         if (prev.hadOwn) {
-          bag[applieKey] = prev.original;
+          bag[appliedKey] = prev.original;
         } else {
-          delete bag[applieKey];
+          delete bag[appliedKey];
         }
       }
       return null;
@@ -157,13 +157,13 @@ export function installObjectMethods(
     // `writable: false` without strict mode) can skip the throw and leave the
     // original value in place. Treat that the same as a throw.
     if (bag[key] !== (replacements[key] as unknown)) {
-      for (const applieKey of applied) {
-        const prev = methods[applieKey];
+      for (const appliedKey of applied) {
+        const prev = methods[appliedKey];
         if (!prev) continue;
         if (prev.hadOwn) {
-          bag[applieKey] = prev.original;
+          bag[appliedKey] = prev.original;
         } else {
-          delete bag[applieKey];
+          delete bag[appliedKey];
         }
       }
       return null;

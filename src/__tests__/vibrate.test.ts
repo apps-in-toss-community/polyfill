@@ -62,7 +62,7 @@ describe('installVibrateShim — Toss mode', () => {
     vi.resetModules();
   });
 
-  it('maps short vibrations (< 40ms) to tickWeak', async () => {
+  it('maps short vibrations (≤ 20ms) to tickWeak', async () => {
     const generateHapticFeedback = vi.fn(async () => undefined);
     vi.doMock('@apps-in-toss/web-framework', () => ({
       getClipboardText: vi.fn(),
