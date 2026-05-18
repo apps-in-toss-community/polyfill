@@ -3,8 +3,6 @@
 How to adopt `@ait-co/polyfill` in a real Apps in Toss mini-app — including
 the recommended pairing with `@ait-co/devtools` for browser-based development.
 
-> Unofficial community project. Not affiliated with Toss.
-
 ## Mental model
 
 - **Polyfill** routes standard Web APIs (`navigator.clipboard`, `navigator.geolocation`, …)
@@ -176,3 +174,7 @@ end-to-end check: it `vi.mock`s `@apps-in-toss/web-framework` with a
 devtools-shaped surface (populated `getAppsInTossGlobals` plus the Tier 1 SDK
 functions), calls `install()`, and asserts each web API lands in the mock.
 Use it as a template if you want a similar guard in your own test suite.
+
+---
+
+Community open-source project.
