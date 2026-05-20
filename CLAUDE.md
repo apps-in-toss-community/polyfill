@@ -12,7 +12,7 @@
 
 ## 프로젝트 개요
 
-**@ait-co/polyfill** — 앱인토스 독점 SDK(`@apps-in-toss/web-framework`) 대신 **표준 Web API**(`navigator.clipboard`, `navigator.geolocation` 등)로 미니앱을 작성할 수 있게 해주는 투명한 어댑터 레이어. 개발자는 `navigator.clipboard.writeText(...)`만 쓰고, polyfill이 런타임에 앱인토스 환경을 감지해 SDK 호출로 변환한다. 토스 환경이 아니면 브라우저 원본을 그대로 사용 (no-op shim 아님).
+**@ait-co/polyfill** — 앱인토스 SDK(`@apps-in-toss/web-framework`) 대신 **표준 Web API**(`navigator.clipboard`, `navigator.geolocation` 등)로 미니앱을 작성할 수 있게 해주는 투명한 어댑터 레이어. 개발자는 `navigator.clipboard.writeText(...)`만 쓰고, polyfill이 런타임에 앱인토스 환경을 감지해 SDK 호출로 변환한다. 토스 환경이 아니면 브라우저 원본을 그대로 사용 (no-op shim 아님).
 
 ### 설계 원칙
 
@@ -85,7 +85,7 @@ SDK 2.5.0 (`@apps-in-toss/web-bridge`) 기준 4개 후보 평가. 핵심은 **SD
 
 ## 짝 repo
 
-- **`devtools`** — devtools는 SDK mock(독점 API를 브라우저에서 흉내), polyfill은 반대 방향(표준 Web API를 앱인토스 환경에서 동작). 둘 다 쓰면 "표준 API로 작성 + 브라우저에서 즉시 실행". devtools unplugin에 polyfill 주입 옵션 추가 고려. **Open question**: 둘 다 설치 시 SDK가 "present(= devtools mock)"로 감지되어 polyfill이 mock을 경유하는지 — 의도된 동작이며 sdk-example integration에서 확인.
+- **`devtools`** — devtools는 SDK mock(SDK API를 브라우저에서 흉내), polyfill은 반대 방향(표준 Web API를 앱인토스 환경에서 동작). 둘 다 쓰면 "표준 API로 작성 + 브라우저에서 즉시 실행". devtools unplugin에 polyfill 주입 옵션 추가 고려. 둘 다 설치 시 SDK가 "present(= devtools mock)"로 감지되어 polyfill이 mock을 경유하는 것은 의도된 동작 — sdk-example의 `ShimCompositionCard` + `devtools-composition.test.ts`로 검증됨.
 - **`sdk-example`** (downstream consumer) — polyfill 완성 후 sdk-example을 **표준 Web API 경로로 재작성**(또는 토글 옵션)해서 동작 증명. polyfill의 주요 품질 게이트.
 
 ## 기술 스택 / 명령어
@@ -144,7 +144,7 @@ SDK 2.5.0 (`@apps-in-toss/web-bridge`) 기준 4개 후보 평가. 핵심은 **SD
 - SDK `getNetworkStatus()`는 one-shot async, web `navigator.onLine`은 sync getter. Gap을 메우는 방식:
   - install 시 `getNetworkStatus()`를 non-blocking 호출로 cache seed.
   - 이후 read마다 background refresh + cached value 반환. 첫 read 전엔 native value (jsdom 기본 `true`) fallback.
-  - `change` 이벤트를 **polling으로 합성**한다 (#34): `change` listener가 1개 이상 등록되면 `CONNECTION_POLLING_INTERVAL_MS` 간격으로 `getNetworkStatus()`를 호출, 이전 snapshot과 `type`/`downlink`/`rtt`/`saveData`가 다르면 `change` Event dispatch. listener가 모두 제거되면 polling 자동 중지.
+  - `change` 이벤트를 **polling으로 합성**한다: `change` listener가 1개 이상 등록되면 `CONNECTION_POLLING_INTERVAL_MS` 간격으로 `getNetworkStatus()`를 호출, 이전 snapshot과 `type`/`downlink`/`rtt`/`saveData`가 다르면 `change` Event dispatch. listener가 모두 제거되면 polling 자동 중지.
 - `WIFI` / `WWAN` / `UNKNOWN` → `effectiveType: '4g'`.
 - `type`(비표준): `WIFI → 'wifi'`, cellular group → `'cellular'`, `OFFLINE → 'none'`.
 
