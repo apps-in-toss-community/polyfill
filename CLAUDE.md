@@ -158,4 +158,4 @@ SDK 2.5.0 (`@apps-in-toss/web-bridge`) 기준 4개 후보 평가. 핵심은 **SD
 
 ## 현재 Status
 
-Tier 1 전부 구현: clipboard · geolocation · share · vibrate · network. Tier 2 평가 완료 — `window.open` ship limited, 나머지 3개 (Storage/history.back/visibilitychange) out-of-scope로 격상. 다음은 `sdk-example` 통합 + miniApp `31146` REVIEW lock 해소 시 실환경 sanity. 전체 로드맵은 [landing page](https://apps-in-toss-community.github.io/).
+Tier 1 전부 구현: clipboard · geolocation · share · vibrate · network. Tier 2 평가 완료 — `window.open` ship limited, 나머지 3개 (Storage/history.back/visibilitychange) out-of-scope로 격상. 다음은 `sdk-example` 통합 + miniApp `31146` REVIEW lock 해소 시 실환경 sanity. 전체 로드맵은 [landing page](https://aitc.dev/).
