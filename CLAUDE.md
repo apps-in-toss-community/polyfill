@@ -136,8 +136,8 @@ SDK 2.5.0 (`@apps-in-toss/web-bridge`) 기준 4개 후보 평가. 핵심은 **SD
 - Web `navigator.vibrate`는 sync에 boolean 반환, SDK `generateHapticFeedback`은 async Promise. 완전한 화해 불가. trade-off:
   - shim은 항상 `true` sync 반환 (fire-and-forget).
   - SDK 호출 실패는 삼킨다(spec의 `vibrate`는 에러 surface 경로 없음).
-- Duration → haptic type: `< 40ms` → `tickWeak`, `≥ 40ms` → `basicMedium`. 배열 패턴: 짝수 index만 "on"으로 보고 `tap` 반복, 홀수 index는 `setTimeout` 지연.
-- 40ms 문턱값은 임의 heuristic — Android `HapticFeedbackConstants` / iOS `UIImpactFeedbackGenerator`가 모두 qualitative라 ms 단위로 정답이 없다. 정확한 vibration 패턴 reproduction은 불가 — 문서화된 best-effort.
+- Duration → haptic type (3-tier): `≤ 20ms` → `tickWeak`, `21–45ms` → `tickMedium`, `≥ 46ms` → `basicMedium`. 배열 패턴: 짝수 index만 "on"으로 보고 `tap` 반복, 홀수 index는 `setTimeout` 지연.
+- 문턱값(20/45ms)은 임의 heuristic — Android `HapticFeedbackConstants` / iOS `UIImpactFeedbackGenerator`가 모두 qualitative라 ms 단위로 정답이 없다. 기존 dog-food 케이스(`vibrate(20)`→tickWeak, `vibrate(50)+`→basicMedium)를 보존하면서 21–45ms nudge에 `tickMedium`을 배정한 결과. 정확한 vibration 패턴 reproduction은 불가 — 문서화된 best-effort.
 - 왜 ship: mini-app UI가 `navigator.vibrate`를 조건부로 호출하는 패턴이 흔하고, 완전히 dropping하면 토스 내에서 무감각한 UX가 된다.
 
 ### network
