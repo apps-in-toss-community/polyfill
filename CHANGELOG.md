@@ -1,5 +1,11 @@
 # @ait-co/polyfill
 
+## 0.1.13
+
+### Patch Changes
+
+- f16de23: chore: reword the npm package description to drop "proprietary SDK" framing — the polyfill routes standard Web APIs through the SDK at runtime; no need to editorialize the SDK as proprietary
+
 ## 0.1.12
 
 ### Patch Changes
