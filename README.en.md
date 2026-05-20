@@ -83,7 +83,7 @@ Tier 1 — all shipped; paired SDK routing is live when inside Apps in Toss.
 | `navigator.geolocation.watchPosition()` / `clearWatch()` | `startUpdateLocation(...)` | 0.1.1 |
 | `navigator.share({ title, text, url })` | `share({ message })` (concatenates into `message`) | 0.1.1 |
 | `navigator.vibrate(pattern)` | `generateHapticFeedback(...)` (best-effort, lossy; see below) | 0.1.1 |
-| `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` (poll on read; no `change` for seed) | 0.1.1 |
+| `navigator.onLine` / `navigator.connection.effectiveType` | `getNetworkStatus()` (poll on read; `change` events synthesised via polling when a listener is attached) | 0.1.1 |
 | `window.open(url, '_blank')` (Tier 2, limited) | `openURL(url)` — `_blank` only, returns a stub Window; see [Tier 2 evaluation](#tier-2-evaluation-2026-05) | 0.1.9 |
 
 ### Tier 1 verification status (2026-05)
