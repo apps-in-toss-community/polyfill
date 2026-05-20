@@ -61,8 +61,14 @@
       }
     },
     "./vibrate-semantic": {
-      "types": "./dist/shims/vibrate-semantic.d.ts",
-      "import": "./dist/shims/vibrate-semantic.js"
+      "import": {
+        "types": "./dist/shims/vibrate-semantic.d.ts",
+        "default": "./dist/shims/vibrate-semantic.js"
+      },
+      "require": {
+        "types": "./dist/shims/vibrate-semantic.d.cts",
+        "default": "./dist/shims/vibrate-semantic.cjs"
+      }
     },
     "./network": {
       "import": {
