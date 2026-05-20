@@ -68,7 +68,7 @@ export default defineConfig([
   {
     ...common,
     entry: { 'shims/vibrate-semantic': 'src/shims/vibrate-semantic.ts' },
-    format: ['esm'],
+    format: formats,
   },
   {
     ...common,
