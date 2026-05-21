@@ -191,7 +191,7 @@ This package sends no telemetry of its own. It does expose a `globalThis.__AIT_P
 globalThis.__AIT_POLYFILL__; // { version: string; loaded: true }
 ```
 
-Privacy policy: [apps-in-toss-community/metrics-ingest](https://github.com/apps-in-toss-community/metrics-ingest)
+Privacy policy: <https://docs.aitc.dev/privacy>
 
 ## Development
 
