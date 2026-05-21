@@ -64,7 +64,7 @@ import { installClipboardShim } from '@ait-co/polyfill/clipboard';
 installClipboardShim(); // installs unconditionally — gate with detect.ts if you want Toss-only
 ```
 
-The package is marked `sideEffects: ["./dist/auto.js", "./dist/auto.cjs"]`, so only the `/auto` entry (in either format) is kept when tree-shaking; everything else is drop-if-unused.
+The package's `sideEffects` lists only the `/auto` and `/sentinel` entries (each in both ESM and CJS), so only those are kept when tree-shaking; every other shim is drop-if-unused.
 
 ## Environment detection
 
@@ -171,6 +171,15 @@ The returned object in the routed (`_blank`) case is a **no-op stub Window**:
 window (form submission, `postMessage` round-trips, polling for `closed`) is
 not supported via the shim — call `openURL` from
 `@apps-in-toss/web-framework` directly when you need that.
+
+To install just this shim manually instead of installing everything via `/auto`,
+use the `@ait-co/polyfill/window-open` subpath:
+
+```ts
+import { installWindowOpenShim } from '@ait-co/polyfill/window-open';
+
+const uninstall = installWindowOpenShim(); // call the returned fn to revert
+```
 
 See [`INTEGRATION.md`](./INTEGRATION.md) for an adoption guide (Vite + React
 snippet, recommended pairing with `@ait-co/devtools`, per-API one-liners).
