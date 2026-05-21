@@ -163,6 +163,11 @@ class ShimConnection extends EventTarget {
     else if (hadHandler && !hasHandler) this.#decrementChangeListeners();
   }
 
+  // Tracks once-listener cleanup: maps a user listener to the internal
+  // one-shot wrapper so we can remove the wrapper when the user removes early.
+  // Using the capture flag as a secondary key (false = default).
+  #onceTrackers = new Map<EventListenerOrEventListenerObject, EventListener>();
+
   constructor() {
     super();
     // Forward `change` events to the `onchange` attribute handler for parity
@@ -182,6 +187,22 @@ class ShimConnection extends EventTarget {
     super.addEventListener(type, listener, options);
     if (type === 'change' && listener !== null) {
       this.#incrementChangeListeners();
+
+      // `once: true` — the base EventTarget will silently drop the listener
+      // after it fires, so our removeEventListener override never runs and
+      // the count never decrements. Register an internal one-shot wrapper
+      // (via super so it does NOT touch the count) that decrements after
+      // dispatch. If the user removes the listener before it fires we cancel
+      // the wrapper at the same time (see removeEventListener below).
+      const isOnce = typeof options === 'object' && options !== null && options.once === true;
+      if (isOnce && !this.#onceTrackers.has(listener)) {
+        const cleanup = () => {
+          this.#onceTrackers.delete(listener);
+          this.#decrementChangeListeners();
+        };
+        this.#onceTrackers.set(listener, cleanup);
+        super.addEventListener('change', cleanup, { once: true });
+      }
     }
   }
 
@@ -192,6 +213,13 @@ class ShimConnection extends EventTarget {
   ): void {
     super.removeEventListener(type, listener, options);
     if (type === 'change' && listener !== null) {
+      const pendingCleanup = this.#onceTrackers.get(listener);
+      if (pendingCleanup !== undefined) {
+        // User removed the once-listener before it fired. Cancel the internal
+        // wrapper so it cannot double-decrement, then decrement once here.
+        this.#onceTrackers.delete(listener);
+        super.removeEventListener('change', pendingCleanup);
+      }
       this.#decrementChangeListeners();
     }
   }
