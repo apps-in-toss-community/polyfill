@@ -178,7 +178,7 @@ scope 외로 결정된 Tier 2 후보들(Storage, `history.back`, `visibilitychan
 globalThis.__AIT_POLYFILL__; // { version: string; loaded: true }
 ```
 
-프라이버시 정책: [apps-in-toss-community/metrics-ingest](https://github.com/apps-in-toss-community/metrics-ingest)
+프라이버시 정책: <https://docs.aitc.dev/privacy>
 
 ## 개발
 
