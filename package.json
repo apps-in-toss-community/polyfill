@@ -132,7 +132,7 @@
     "format": "biome format --write ."
   },
   "peerDependencies": {
-    "@apps-in-toss/web-framework": ">=2.4.0 <3.0.0"
+    "@apps-in-toss/web-framework": ">=2.4.0 <4.0.0"
   },
   "peerDependenciesMeta": {
     "@apps-in-toss/web-framework": {
@@ -140,7 +140,7 @@
     }
   },
   "devDependencies": {
-    "@apps-in-toss/web-framework": "2.5.0",
+    "@apps-in-toss/web-framework": "3.0.0-beta.9d42c0b",
     "@biomejs/biome": "2.4.15",
     "@changesets/cli": "^2.31.0",
     "@types/node": "^25.6.2",

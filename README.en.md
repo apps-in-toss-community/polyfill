@@ -114,7 +114,7 @@ that step.
 ## Tier 2 evaluation (2026-05)
 
 The Tier 2 candidates listed in earlier roadmaps were assessed against the
-SDK 2.5.0 surface (`@apps-in-toss/web-bridge` exports). Of the four, one
+SDK 3.x surface (`@apps-in-toss/web-framework` exports). Of the four, one
 ships in a deliberately limited form and three are formally moved to
 out-of-scope.
 
