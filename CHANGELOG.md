@@ -1,5 +1,11 @@
 # @ait-co/polyfill
 
+## 0.1.17
+
+### Patch Changes
+
+- a8e9bf7: web-framework dev-pin을 새 3.0.0-beta 빌드(9d42c0b→3051978)로 갱신. peer range·GA flip과 무관한 dev-only beta bump.
+
 ## 0.1.16
 
 ### Patch Changes
