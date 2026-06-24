@@ -190,9 +190,9 @@ The Tier 2 candidates that landed as out-of-scope (Storage, `history.back`,
 `visibilitychange`) are listed with rationale in
 [Tier 2 evaluation](#tier-2-evaluation-2026-05).
 
-## Telemetry / Sentinel
+## Sentinel (local detection)
 
-This package sends no telemetry of its own. It does expose a `globalThis.__AIT_POLYFILL__` sentinel so the devtools companion can detect that the polyfill is loaded. When devtools is active and opt-out is not applied, devtools may include this signal in an anonymous daily ping.
+This package sends no telemetry. It exposes a `globalThis.__AIT_POLYFILL__` sentinel so the devtools companion can detect that the polyfill is loaded. The sentinel is used solely for local in-browser detection — no data is sent anywhere.
 
 ```ts
 // read-only, non-enumerable — do not use in application code.

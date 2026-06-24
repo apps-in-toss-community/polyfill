@@ -176,9 +176,9 @@ const uninstall = installWindowOpenShim(); // 반환된 함수로 원복
 
 scope 외로 결정된 Tier 2 후보들(Storage, `history.back`, `visibilitychange`)은 근거와 함께 [Tier 2 평가](#tier-2-평가-2026-05)에 정리되어 있습니다.
 
-## 텔레메트리 / Sentinel
+## Sentinel (로컬 감지)
 
-이 패키지는 자체 텔레메트리를 보내지 않습니다. 다만 사용 여부 신호를 위해 `globalThis.__AIT_POLYFILL__` sentinel을 노출하며, devtools 컴패니언이 활성 상태일 때만 (devtools opt-out 미적용 사용자 한정) 이 신호를 익명 daily ping에 포함시킬 수 있습니다.
+이 패키지는 텔레메트리를 보내지 않습니다. 사용 여부 신호를 위해 `globalThis.__AIT_POLYFILL__` sentinel을 노출하며, devtools 컴패니언이 이를 읽어 polyfill 활성 여부를 로컬에서 감지하는 용도로만 씁니다 — 외부로 전송되는 데이터는 없습니다.
 
 ```ts
 // read-only, non-enumerable — 애플리케이션 코드에서 직접 사용하지 마세요.
